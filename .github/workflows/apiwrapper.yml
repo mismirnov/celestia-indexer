@@ -14,5 +14,5 @@ jobs:
           curl -X POST \
           -d '{ "event_type": "tag_created", "client_payload": { "tag": "v1.0.0"}}' \
           -H "Content-Type: application/json" \
-          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }} \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           https://api.github.com/repos/mismirnov/celenium-api-go/dispatches
