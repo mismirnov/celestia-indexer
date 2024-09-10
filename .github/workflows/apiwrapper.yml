@@ -1,5 +1,4 @@
 name: Generate API
-permissions: write-all
 on:
   push:
     tags:
@@ -10,10 +9,21 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - name: Start API wrapper workflow
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Get latest tag
+        id: get_tag
+        run: echo "LATEST_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
+
+      - name: Set output
+        id: set_output
+        run: echo "::set-output name=tag::${{ env.LATEST_TAG }}"
+        
+      - name: Request to API wrapper
         run: |
           curl -X POST \
-          -d '{ "event_type": "tag_created", "client_payload": { "tag": "v1.0.0"}}' \
+          -d '{ "event_type": "tag_created", "client_payload": { "tag": "${{ steps.set_output.outputs.tag }}"}}' \
           -H "Content-Type: application/json" \
           -H "Authorization: token ${{ secrets.PAT }}" \
           https://api.github.com/repos/mismirnov/celenium-api-go/dispatches
