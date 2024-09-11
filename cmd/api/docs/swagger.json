@@ -163,7 +163,7 @@
         },
         "/address/{hash}/blobs": {
             "get": {
-                "description": "Get blobs pushed by address",
+                "description": "Test description for openApi",
                 "produces": [
                     "application/json"
                 ],
