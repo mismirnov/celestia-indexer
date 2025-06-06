@@ -52,7 +52,7 @@ func handleWithdrawDelegatorRewards(ctx *context.Context, events []storage.Event
 		return errors.New("nil event index")
 	}
 	if msg == nil {
-		return errors.New("nil message in events hanler")
+		return errors.New("nil message in events handler")
 	}
 	if action := decoder.StringFromMap(events[*idx].Data, "action"); action != "/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward" {
 		return errors.Errorf("unexpected event action %s for message type %s", action, msg.Type.String())
@@ -75,6 +75,7 @@ func processWithdrawDelegatorRewards(ctx *context.Context, events []storage.Even
 			}
 		}
 	}
-	*idx = len(events) - 1
+
+	toTheNextAction(events, idx)
 	return nil
 }

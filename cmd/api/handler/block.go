@@ -9,8 +9,8 @@ import (
 
 	"github.com/celenium-io/celestia-indexer/pkg/node"
 	"github.com/celenium-io/celestia-indexer/pkg/types"
-	"github.com/celestiaorg/celestia-app/pkg/appconsts"
-	"github.com/celestiaorg/celestia-app/pkg/da"
+	"github.com/celestiaorg/celestia-app/v4/pkg/appconsts"
+	"github.com/celestiaorg/celestia-app/v4/pkg/da"
 	"github.com/celestiaorg/go-square/shares"
 	"github.com/celestiaorg/go-square/square"
 
@@ -393,12 +393,12 @@ func (handler *BlockHandler) BlobsCount(c echo.Context) error {
 		return badRequestError(c, err)
 	}
 
-	count, err := handler.blobLogs.CountByHeight(c.Request().Context(), req.Height)
+	stats, err := handler.blockStats.ByHeight(c.Request().Context(), req.Height)
 	if err != nil {
 		return handleError(c, err, handler.blobLogs)
 	}
 
-	return c.JSON(http.StatusOK, count)
+	return c.JSON(http.StatusOK, stats.BlobsCount)
 }
 
 // BlockODS godoc
@@ -446,8 +446,8 @@ func (handler *BlockHandler) BlockODS(c echo.Context) error {
 
 	dataSquare, err := square.Construct(
 		block.Block.Data.Txs.ToSliceOfBytes(),
-		appconsts.SquareSizeUpperBound(0),
-		appconsts.SubtreeRootThreshold(0),
+		appconsts.SquareSizeUpperBound,
+		appconsts.SubtreeRootThreshold,
 	)
 	if err != nil {
 		return internalServerError(c, err)

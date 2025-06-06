@@ -253,6 +253,68 @@
                 }
             }
         },
+        "/address/{hash}/celestials": {
+            "get": {
+                "description": "Get list of celestial id for address",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "address"
+                ],
+                "summary": "Get list of celestial id for address",
+                "operationId": "address-celestials",
+                "parameters": [
+                    {
+                        "maxLength": 47,
+                        "minLength": 47,
+                        "type": "string",
+                        "description": "Hash",
+                        "name": "hash",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.Celestial"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
         "/address/{hash}/delegations": {
             "get": {
                 "description": "Get delegations made by address",
@@ -553,6 +615,9 @@
                             "MsgUpdateClient",
                             "MsgUpgradeClient",
                             "MsgSubmitMisbehaviour",
+                            "MsgRecoverClient",
+                            "MsgIBCSoftwareUpgrade",
+                            "MsgUpdateParams",
                             "MsgConnectionOpenInit",
                             "MsgConnectionOpenTry",
                             "MsgConnectionOpenAck",
@@ -566,7 +631,19 @@
                             "MsgRecvPacket",
                             "MsgTimeout",
                             "MsgTimeoutOnClose",
-                            "MsgAcknowledgement"
+                            "MsgAcknowledgement",
+                            "MsgSignalVersion",
+                            "MsgTryUpgrade",
+                            "MsgCreateMailbox",
+                            "MsgProcessMessage",
+                            "MsgSetMailbox",
+                            "MsgCreateCollateralToken",
+                            "MsgCreateSyntheticToken",
+                            "MsgSetToken",
+                            "MsgEnrollRemoteRouter",
+                            "MsgUnrollRemoteRouter",
+                            "MsgRemoteTransfer",
+                            "MsgUpdateMinfeeParams"
                         ],
                         "type": "string",
                         "description": "Comma-separated message types list",
@@ -863,6 +940,9 @@
                             "MsgUpdateClient",
                             "MsgUpgradeClient",
                             "MsgSubmitMisbehaviour",
+                            "MsgRecoverClient",
+                            "MsgIBCSoftwareUpgrade",
+                            "MsgUpdateParams",
                             "MsgConnectionOpenInit",
                             "MsgConnectionOpenTry",
                             "MsgConnectionOpenAck",
@@ -876,7 +956,19 @@
                             "MsgRecvPacket",
                             "MsgTimeout",
                             "MsgTimeoutOnClose",
-                            "MsgAcknowledgement"
+                            "MsgAcknowledgement",
+                            "MsgSignalVersion",
+                            "MsgTryUpgrade",
+                            "MsgCreateMailbox",
+                            "MsgProcessMessage",
+                            "MsgSetMailbox",
+                            "MsgCreateCollateralToken",
+                            "MsgCreateSyntheticToken",
+                            "MsgSetToken",
+                            "MsgEnrollRemoteRouter",
+                            "MsgUnrollRemoteRouter",
+                            "MsgRemoteTransfer",
+                            "MsgUpdateMinfeeParams"
                         ],
                         "type": "string",
                         "description": "Comma-separated message types list",
@@ -1060,6 +1152,68 @@
                 }
             }
         },
+        "/address/{hash}/votes": {
+            "get": {
+                "description": "Get list of votes for address",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "address"
+                ],
+                "summary": "Get list of votes for address",
+                "operationId": "address-votes",
+                "parameters": [
+                    {
+                        "maxLength": 47,
+                        "minLength": 47,
+                        "type": "string",
+                        "description": "Hash",
+                        "name": "hash",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.Vote"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
         "/blob": {
             "get": {
                 "description": "Returns blobs",
@@ -1164,7 +1318,7 @@
                 }
             },
             "post": {
-                "description": "Returns blob\nTo authorize your requests you have to select the required tariff on our site. Then you receive api key to authorize. Api key should be passed via request header `apikey`.",
+                "description": "Returns blob.\nTo authorize your requests you have to select the required tariff on our site. Then you receive api key to authorize. Api key should be passed via request header `apikey`.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1178,31 +1332,12 @@
                 "operationId": "get-blob",
                 "parameters": [
                     {
-                        "description": "Base64-encoded namespace id and version",
-                        "name": "hash",
+                        "description": "Request body containing height, commitment and namespace hash",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "minimum": 1,
-                        "description": "Block heigth",
-                        "name": "height",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "description": "Blob commitment",
-                        "name": "commitment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/handler.postBlobRequest"
                         }
                     }
                 ],
@@ -1224,7 +1359,7 @@
         },
         "/blob/metadata": {
             "post": {
-                "description": "Returns blob metadata",
+                "description": "Returns blob metadata\nTo authorize your requests you have to select the required tariff on our site. Then you receive api key to authorize. Api key should be passed via request header `apikey`.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1238,31 +1373,53 @@
                 "operationId": "get-blob-metadata",
                 "parameters": [
                     {
-                        "description": "Base64-encoded namespace id and version",
-                        "name": "hash",
+                        "description": "Request body containing height, commitment and namespace hash",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/handler.postBlobRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.BlobLog"
                         }
                     },
-                    {
-                        "minimum": 1,
-                        "description": "Block heigth",
-                        "name": "height",
-                        "in": "body",
-                        "required": true,
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
-                            "type": "integer"
+                            "$ref": "#/definitions/handler.Error"
                         }
-                    },
+                    }
+                }
+            }
+        },
+        "/blob/proofs": {
+            "get": {
+                "description": "Returns blob inclusion proofs",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "namespace"
+                ],
+                "summary": "Get blob inclusion proofs",
+                "operationId": "get-blob-proof",
+                "parameters": [
                     {
-                        "description": "Blob commitment",
-                        "name": "commitment",
+                        "description": "Request body containing height, commitment and namespace hash",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/handler.postBlobRequest"
                         }
                     }
                 ],
@@ -1704,6 +1861,9 @@
                             "MsgUpdateClient",
                             "MsgUpgradeClient",
                             "MsgSubmitMisbehaviour",
+                            "MsgRecoverClient",
+                            "MsgIBCSoftwareUpgrade",
+                            "MsgUpdateParams",
                             "MsgConnectionOpenInit",
                             "MsgConnectionOpenTry",
                             "MsgConnectionOpenAck",
@@ -1717,7 +1877,19 @@
                             "MsgRecvPacket",
                             "MsgTimeout",
                             "MsgTimeoutOnClose",
-                            "MsgAcknowledgement"
+                            "MsgAcknowledgement",
+                            "MsgSignalVersion",
+                            "MsgTryUpgrade",
+                            "MsgCreateMailbox",
+                            "MsgProcessMessage",
+                            "MsgSetMailbox",
+                            "MsgCreateCollateralToken",
+                            "MsgCreateSyntheticToken",
+                            "MsgSetToken",
+                            "MsgEnrollRemoteRouter",
+                            "MsgUnrollRemoteRouter",
+                            "MsgRemoteTransfer",
+                            "MsgUpdateMinfeeParams"
                         ],
                         "type": "string",
                         "description": "Comma-separated message types list",
@@ -1786,6 +1958,9 @@
                             "MsgUpdateClient",
                             "MsgUpgradeClient",
                             "MsgSubmitMisbehaviour",
+                            "MsgRecoverClient",
+                            "MsgIBCSoftwareUpgrade",
+                            "MsgUpdateParams",
                             "MsgConnectionOpenInit",
                             "MsgConnectionOpenTry",
                             "MsgConnectionOpenAck",
@@ -1799,7 +1974,19 @@
                             "MsgRecvPacket",
                             "MsgTimeout",
                             "MsgTimeoutOnClose",
-                            "MsgAcknowledgement"
+                            "MsgAcknowledgement",
+                            "MsgSignalVersion",
+                            "MsgTryUpgrade",
+                            "MsgCreateMailbox",
+                            "MsgProcessMessage",
+                            "MsgSetMailbox",
+                            "MsgCreateCollateralToken",
+                            "MsgCreateSyntheticToken",
+                            "MsgSetToken",
+                            "MsgEnrollRemoteRouter",
+                            "MsgUnrollRemoteRouter",
+                            "MsgRemoteTransfer",
+                            "MsgUpdateMinfeeParams"
                         ],
                         "type": "string",
                         "description": "Comma-separated message types which should be excluded from list",
@@ -2033,6 +2220,41 @@
                 }
             }
         },
+        "/gas/price/{priority}": {
+            "get": {
+                "description": "Get estimated gas price with priority filter based on historical data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "gas"
+                ],
+                "summary": "Get estimated gas price with priority filter",
+                "operationId": "gas-price-priority",
+                "parameters": [
+                    {
+                        "enum": [
+                            "slow",
+                            "median",
+                            "fast"
+                        ],
+                        "type": "string",
+                        "description": "Priority",
+                        "name": "priority",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/head": {
             "get": {
                 "description": "Get current indexer head",
@@ -2049,6 +2271,449 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/responses.State"
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/ibc/channel": {
+            "get": {
+                "description": "Get ibc channels info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ibc"
+                ],
+                "summary": "Get ibc channels info",
+                "operationId": "get-ibc-channels",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "description": "Sort order. Default: desc",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client id",
+                        "name": "client_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Connection id",
+                        "name": "connection_id",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "initialization",
+                            "opened",
+                            "closed"
+                        ],
+                        "type": "string",
+                        "description": "Channel status",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.IbcChannel"
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/ibc/channel/{id}": {
+            "get": {
+                "description": "Get ibc channel info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ibc"
+                ],
+                "summary": "Get ibc channel info",
+                "operationId": "get-ibc-channel",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "IBC channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.IbcChannel"
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/ibc/client": {
+            "get": {
+                "description": "Get ibc clients info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ibc"
+                ],
+                "summary": "Get ibc clients info",
+                "operationId": "get-ibc-clients",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "description": "Sort order. Default: desc",
+                        "name": "sort",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.IbcClient"
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/ibc/client/{id}": {
+            "get": {
+                "description": "Get ibc client info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ibc"
+                ],
+                "summary": "Get ibc client info",
+                "operationId": "get-ibc-client",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "IBC client id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.IbcClient"
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/ibc/connection": {
+            "get": {
+                "description": "Get ibc connections info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ibc"
+                ],
+                "summary": "Get ibc connections info",
+                "operationId": "get-ibc-conns",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "description": "Sort order. Default: desc",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client id",
+                        "name": "client_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.IbcConnection"
+                            }
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/ibc/connection/{id}": {
+            "get": {
+                "description": "Get ibc client info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ibc"
+                ],
+                "summary": "Get ibc connection info",
+                "operationId": "get-ibc-conn",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "IBC connection id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.IbcConnection"
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/ibc/transfer": {
+            "get": {
+                "description": "Get ibc transfers info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ibc"
+                ],
+                "summary": "Get ibc transfers info",
+                "operationId": "get-ibc-transfers",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "description": "Sort order. Default: desc",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Client id",
+                        "name": "client_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Connection id",
+                        "name": "connection_id",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "initialization",
+                            "opened",
+                            "closed"
+                        ],
+                        "type": "string",
+                        "description": "Channel status",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.IbcTransfer"
+                            }
                         }
                     },
                     "204": {
@@ -2130,76 +2795,6 @@
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/handler.Error"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handler.Error"
-                        }
-                    }
-                }
-            }
-        },
-        "/namespace/active": {
-            "get": {
-                "description": "Get last used namespace",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "namespace"
-                ],
-                "summary": "Get last used namespace",
-                "operationId": "get-namespace-active",
-                "parameters": [
-                    {
-                        "enum": [
-                            "time",
-                            "pfb_count",
-                            "size"
-                        ],
-                        "type": "string",
-                        "description": "Sort field. Default: time",
-                        "name": "sort",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/responses.Namespace"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handler.Error"
-                        }
-                    }
-                }
-            }
-        },
-        "/namespace/count": {
-            "get": {
-                "description": "Get count of namespaces in network",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "namespace"
-                ],
-                "summary": "Get count of namespaces in network",
-                "operationId": "get-namespace-count",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "integer"
                         }
                     },
                     "500": {
@@ -2664,6 +3259,207 @@
                 }
             }
         },
+        "/proposal": {
+            "get": {
+                "description": "List proposal info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "proposal"
+                ],
+                "summary": "List proposal info",
+                "operationId": "list-proposal",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "description": "Sort order. Default: desc",
+                        "name": "sort",
+                        "in": "query"
+                    },
+                    {
+                        "maxLength": 47,
+                        "minLength": 47,
+                        "type": "string",
+                        "description": "Proposer celestia address",
+                        "name": "proposer",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated proposal status list",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated proposal type list",
+                        "name": "type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.Proposal"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/proposal/{id}": {
+            "get": {
+                "description": "Get proposal info",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "proposal"
+                ],
+                "summary": "Get proposal info",
+                "operationId": "get-proposal",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Internal identity",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/responses.Proposal"
+                        }
+                    },
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/proposal/{id}/votes": {
+            "get": {
+                "description": "Get proposal's votes",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "proposal"
+                ],
+                "summary": "Get proposal's votes",
+                "operationId": "proposal-votes",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "yes",
+                            "no",
+                            "no_with_veto",
+                            "abstain"
+                        ],
+                        "type": "string",
+                        "description": "Option",
+                        "name": "option",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "address",
+                            "validator"
+                        ],
+                        "type": "string",
+                        "description": "Voter type",
+                        "name": "voter",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.Vote"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
         "/rollup": {
             "get": {
                 "description": "List rollups info",
@@ -2709,6 +3505,36 @@
                         "type": "string",
                         "description": "Sort field. Default: size",
                         "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated rollup category list",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated rollup tags list",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated rollup stack list",
+                        "name": "stack",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated rollup provider list",
+                        "name": "provider",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "If true, shows rollups with activity over the last month",
+                        "name": "is_active",
                         "in": "query"
                     }
                 ],
@@ -2814,6 +3640,30 @@
                         "description": "Sort field. Default: mb_price",
                         "name": "sort_by",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated rollup category list",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated rollup tags list",
+                        "name": "tags",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated rollup stack list",
+                        "name": "stack",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated rollup provider list",
+                        "name": "provider",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -2823,6 +3673,67 @@
                             "type": "array",
                             "items": {
                                 "$ref": "#/definitions/responses.RollupWithDayStats"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/rollup/group": {
+            "get": {
+                "description": "Rollup Grouped Statistics",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "rollup"
+                ],
+                "summary": "Rollup Grouped Statistics",
+                "operationId": "rollup-grouped-statistics",
+                "parameters": [
+                    {
+                        "enum": [
+                            "sum",
+                            "avg"
+                        ],
+                        "type": "string",
+                        "description": "Aggregate function",
+                        "name": "func",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "stack",
+                            "type",
+                            "category",
+                            "vm",
+                            "provider"
+                        ],
+                        "type": "string",
+                        "description": "Group column",
+                        "name": "column",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.RollupGroupedStats"
                             }
                         }
                     },
@@ -2886,7 +3797,7 @@
                 }
             }
         },
-        "/rollup/stats/series": {
+        "/rollup/stats/series/{timeframe}": {
             "get": {
                 "description": "Get series for all rollups",
                 "produces": [
@@ -2897,13 +3808,27 @@
                 ],
                 "summary": "Get series for all rollups",
                 "operationId": "get-rollup-all-series",
+                "parameters": [
+                    {
+                        "enum": [
+                            "hour",
+                            "day",
+                            "month"
+                        ],
+                        "type": "string",
+                        "description": "Timeframe",
+                        "name": "timeframe",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/responses.RollupAllSeriesItem"
+                                "$ref": "#/definitions/responses.RollupAllSeriesResponse"
                             }
                         }
                     },
@@ -3386,6 +4311,137 @@
                 }
             }
         },
+        "/stats/ibc/chains": {
+            "get": {
+                "description": "Get stats for ibc channels splitted by chains",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stats"
+                ],
+                "summary": "Get stats for ibc channels splitted by chains",
+                "operationId": "stats-ibc-chains",
+                "parameters": [
+                    {
+                        "maximum": 100,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.IbcChainStats"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/stats/ibc/series/{id}/{name}/{timeframe}": {
+            "get": {
+                "description": "Get histogram for ibc channels with precomputed stats by series name and timeframe",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stats"
+                ],
+                "summary": "Get histogram for ibc channels with precomputed stats",
+                "operationId": "stats-ibc-series",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Channel id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "hour",
+                            "day",
+                            "month"
+                        ],
+                        "type": "string",
+                        "description": "Timeframe",
+                        "name": "timeframe",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "count",
+                            "amount"
+                        ],
+                        "type": "string",
+                        "description": "Series name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Time from in unix timestamp",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Time to in unix timestamp",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.HistogramItem"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
         "/stats/messages_count_24h": {
             "get": {
                 "description": "Get messages distribution for the last 24 hours",
@@ -3528,101 +4584,6 @@
                             "items": {
                                 "$ref": "#/definitions/responses.NamespaceUsage"
                             }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handler.Error"
-                        }
-                    }
-                }
-            }
-        },
-        "/stats/price/current": {
-            "get": {
-                "description": "Get current TIA price",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "stats"
-                ],
-                "summary": "Get current TIA price",
-                "operationId": "stats-price-current",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/responses.Price"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handler.Error"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/handler.Error"
-                        }
-                    }
-                }
-            }
-        },
-        "/stats/price/series/{timeframe}": {
-            "get": {
-                "description": "Get histogram with TIA price",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "stats"
-                ],
-                "summary": "Get histogram with TIA price",
-                "operationId": "stats-price-series",
-                "parameters": [
-                    {
-                        "enum": [
-                            "1m",
-                            "1h",
-                            "1d"
-                        ],
-                        "type": "string",
-                        "description": "Timeframe",
-                        "name": "timeframe",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Time from in unix timestamp",
-                        "name": "from",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Time to in unix timestamp",
-                        "name": "to",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/responses.Price"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/handler.Error"
                         }
                     },
                     "500": {
@@ -3829,6 +4790,36 @@
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
+        "/stats/size_groups": {
+            "get": {
+                "description": "Get blobs count grouped by size",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "stats"
+                ],
+                "summary": "Get blobs count grouped by size",
+                "operationId": "stats-size-groups",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.SizeGroup"
+                            }
                         }
                     },
                     "500": {
@@ -4190,6 +5181,9 @@
                             "MsgUpdateClient",
                             "MsgUpgradeClient",
                             "MsgSubmitMisbehaviour",
+                            "MsgRecoverClient",
+                            "MsgIBCSoftwareUpgrade",
+                            "MsgUpdateParams",
                             "MsgConnectionOpenInit",
                             "MsgConnectionOpenTry",
                             "MsgConnectionOpenAck",
@@ -4203,7 +5197,19 @@
                             "MsgRecvPacket",
                             "MsgTimeout",
                             "MsgTimeoutOnClose",
-                            "MsgAcknowledgement"
+                            "MsgAcknowledgement",
+                            "MsgSignalVersion",
+                            "MsgTryUpgrade",
+                            "MsgCreateMailbox",
+                            "MsgProcessMessage",
+                            "MsgSetMailbox",
+                            "MsgCreateCollateralToken",
+                            "MsgCreateSyntheticToken",
+                            "MsgSetToken",
+                            "MsgEnrollRemoteRouter",
+                            "MsgUnrollRemoteRouter",
+                            "MsgRemoteTransfer",
+                            "MsgUpdateMinfeeParams"
                         ],
                         "type": "string",
                         "description": "Comma-separated message types list",
@@ -4272,6 +5278,9 @@
                             "MsgUpdateClient",
                             "MsgUpgradeClient",
                             "MsgSubmitMisbehaviour",
+                            "MsgRecoverClient",
+                            "MsgIBCSoftwareUpgrade",
+                            "MsgUpdateParams",
                             "MsgConnectionOpenInit",
                             "MsgConnectionOpenTry",
                             "MsgConnectionOpenAck",
@@ -4285,7 +5294,19 @@
                             "MsgRecvPacket",
                             "MsgTimeout",
                             "MsgTimeoutOnClose",
-                            "MsgAcknowledgement"
+                            "MsgAcknowledgement",
+                            "MsgSignalVersion",
+                            "MsgTryUpgrade",
+                            "MsgCreateMailbox",
+                            "MsgProcessMessage",
+                            "MsgSetMailbox",
+                            "MsgCreateCollateralToken",
+                            "MsgCreateSyntheticToken",
+                            "MsgSetToken",
+                            "MsgEnrollRemoteRouter",
+                            "MsgUnrollRemoteRouter",
+                            "MsgRemoteTransfer",
+                            "MsgUpdateMinfeeParams"
                         ],
                         "type": "string",
                         "description": "Comma-separated message types list which should be excluded",
@@ -5089,6 +6110,66 @@
                 }
             }
         },
+        "/validators/{id}/votes": {
+            "get": {
+                "description": "Get list of votes for validator",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "validator"
+                ],
+                "summary": "Get list of votes for validator",
+                "operationId": "validator-votes",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Internal validator id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Count of requested entities",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/responses.Vote"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.Error"
+                        }
+                    }
+                }
+            }
+        },
         "/vesting/{id}/periods": {
             "get": {
                 "description": "Periods vesting periods by id. Returns not empty array only for periodic vestings.",
@@ -5180,12 +6261,38 @@
                 }
             }
         },
+        "handler.postBlobRequest": {
+            "type": "object",
+            "required": [
+                "commitment",
+                "hash",
+                "height"
+            ],
+            "properties": {
+                "commitment": {
+                    "type": "string",
+                    "example": "vbGakK59+Non81TE3ULg5Ve5ufT9SFm/bCyY+WLR3gg="
+                },
+                "hash": {
+                    "type": "string",
+                    "example": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAs2bWWU6FOB0="
+                },
+                "height": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 123456
+                }
+            }
+        },
         "responses.Address": {
             "description": "Celestia address information",
             "type": "object",
             "properties": {
                 "balance": {
                     "$ref": "#/definitions/responses.Balance"
+                },
+                "celestials": {
+                    "$ref": "#/definitions/responses.Celestial"
                 },
                 "first_height": {
                     "type": "integer",
@@ -5287,9 +6394,7 @@
                     "$ref": "#/definitions/responses.ShortRollup"
                 },
                 "signer": {
-                    "type": "string",
-                    "format": "string",
-                    "example": "celestia1jc92qdnty48pafummfr8ava2tjtuhfdw774w60"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "size": {
                     "type": "integer",
@@ -5452,6 +6557,28 @@
                 }
             }
         },
+        "responses.Celestial": {
+            "description": "Linked celestial id",
+            "type": "object",
+            "properties": {
+                "image_url": {
+                    "type": "string",
+                    "example": "https://ipfs.io/ipfs/QmUi269vE25fagqhyMCCTNSoiW6x4LHCwwQb3keSrEXAmC"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "name"
+                },
+                "primary": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "status": {
+                    "type": "string",
+                    "example": "VERIFIED"
+                }
+            }
+        },
         "responses.Change24hBlockStats": {
             "type": "object",
             "properties": {
@@ -5517,8 +6644,7 @@
                     "example": "0.1"
                 },
                 "delegator": {
-                    "type": "string",
-                    "example": "celestia1jc92qdnty48pafummfr8ava2tjtuhfdw774w60"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "validator": {
                     "$ref": "#/definitions/responses.ShortValidator"
@@ -5578,7 +6704,25 @@
         "responses.Enums": {
             "type": "object",
             "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "celestials_statuses": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "event_type": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ibc_channel_status": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -5590,7 +6734,43 @@
                         "type": "string"
                     }
                 },
+                "proposal_status": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "proposal_type": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "rollup_type": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "status": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "vote_option": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "vote_type": {
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -5672,12 +6852,10 @@
                     "example": "2023-07-04T03:10:57+00:00"
                 },
                 "grantee": {
-                    "type": "string",
-                    "example": "celestia1jc92qdnty48pafummfr8ava2tjtuhfdw774w60"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "granter": {
-                    "type": "string",
-                    "example": "celestia1jc92qdnty48pafummfr8ava2tjtuhfdw774w60"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "height": {
                     "type": "integer",
@@ -5713,6 +6891,339 @@
                     "type": "string",
                     "format": "string",
                     "example": "2223424"
+                }
+            }
+        },
+        "responses.IbcChainStats": {
+            "type": "object",
+            "properties": {
+                "chain": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "123456"
+                },
+                "flow": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "123445"
+                },
+                "received": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "123445"
+                },
+                "sent": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "123445"
+                }
+            }
+        },
+        "responses.IbcChannel": {
+            "type": "object",
+            "properties": {
+                "client": {
+                    "$ref": "#/definitions/responses.ShortIbcClient"
+                },
+                "confirmation_height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "confirmation_tx_hash": {
+                    "type": "string",
+                    "format": "binary",
+                    "example": "652452A670018D629CC116E510BA88C1CABE061336661B1F3D206D248BD558AF"
+                },
+                "confirmed_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "connection_id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "connection-1"
+                },
+                "counterparty_channel_id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "channel-1"
+                },
+                "counterparty_port_id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "transfer"
+                },
+                "created_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "created_tx_hash": {
+                    "type": "string",
+                    "format": "binary",
+                    "example": "652452A670018D629CC116E510BA88C1CABE061336661B1F3D206D248BD558AF"
+                },
+                "creator": {
+                    "$ref": "#/definitions/responses.ShortAddress"
+                },
+                "height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "channel-1"
+                },
+                "ordering": {
+                    "type": "boolean",
+                    "format": "boolean",
+                    "example": false
+                },
+                "port_id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "transfer"
+                },
+                "status": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "opened"
+                },
+                "version": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "ics20-1"
+                }
+            }
+        },
+        "responses.IbcClient": {
+            "type": "object",
+            "properties": {
+                "chain_id": {
+                    "type": "string",
+                    "format": "binary",
+                    "example": "osmosis-1"
+                },
+                "connection_count": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "created_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "creator": {
+                    "$ref": "#/definitions/responses.ShortAddress"
+                },
+                "frozen_revision_height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "frozen_revision_number": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "client-1"
+                },
+                "latest_revision_height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "latest_revision_number": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "max_clock_drift": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "trust_level_denominator": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "trust_level_numerator": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "trusting_period": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "tx_hash": {
+                    "type": "string",
+                    "format": "binary",
+                    "example": "652452A670018D629CC116E510BA88C1CABE061336661B1F3D206D248BD558AF"
+                },
+                "type": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "client"
+                },
+                "unbonding_period": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "updated_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                }
+            }
+        },
+        "responses.IbcConnection": {
+            "type": "object",
+            "properties": {
+                "channels_count": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "client": {
+                    "$ref": "#/definitions/responses.ShortIbcClient"
+                },
+                "connected_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "connected_height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "connected_tx_hash": {
+                    "type": "string",
+                    "format": "binary",
+                    "example": "652452A670018D629CC116E510BA88C1CABE061336661B1F3D206D248BD558AF"
+                },
+                "counterparty_client_id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "client-1"
+                },
+                "counterparty_connection_id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "connection-1"
+                },
+                "created_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "created_tx_hash": {
+                    "type": "string",
+                    "format": "binary",
+                    "example": "652452A670018D629CC116E510BA88C1CABE061336661B1F3D206D248BD558AF"
+                },
+                "height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "connection-1"
+                }
+            }
+        },
+        "responses.IbcTransfer": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "123445"
+                },
+                "channel_id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "channel-1"
+                },
+                "connection_id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "connection-1"
+                },
+                "denom": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "utia"
+                },
+                "height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 123456
+                },
+                "memo": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "memo"
+                },
+                "port": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "transfer"
+                },
+                "receiver": {
+                    "$ref": "#/definitions/responses.ShortAddress"
+                },
+                "sender": {
+                    "$ref": "#/definitions/responses.ShortAddress"
+                },
+                "sequence": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 123456
+                },
+                "time": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "timeout": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "timeout_height": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 100
+                },
+                "tx_hash": {
+                    "type": "string",
+                    "format": "binary",
+                    "example": "652452A670018D629CC116E510BA88C1CABE061336661B1F3D206D248BD558AF"
                 }
             }
         },
@@ -5769,9 +7280,7 @@
                     "example": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAs2bWWU6FOB0="
                 },
                 "signer": {
-                    "type": "string",
-                    "format": "string",
-                    "example": "celestia1jc92qdnty48pafummfr8ava2tjtuhfdw774w60"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "size": {
                     "type": "integer",
@@ -6098,33 +7607,149 @@
                 "type": "string"
             }
         },
-        "responses.Price": {
+        "responses.Proposal": {
             "type": "object",
             "properties": {
-                "close": {
+                "abstain": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "abstain_addrs": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "abstain_vals": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "abstain_voting_power": {
                     "type": "string",
                     "format": "string",
-                    "example": "0.17632"
+                    "example": "1000000000"
                 },
-                "high": {
-                    "type": "string",
-                    "format": "string",
-                    "example": "0.17632"
-                },
-                "low": {
-                    "type": "string",
-                    "format": "string",
-                    "example": "0.17632"
-                },
-                "open": {
-                    "type": "string",
-                    "format": "string",
-                    "example": "0.17632"
-                },
-                "time": {
+                "activation_time": {
                     "type": "string",
                     "format": "date-time",
                     "example": "2023-07-04T03:10:57+00:00"
+                },
+                "changes": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "created_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "deposit": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "1000000000"
+                },
+                "deposit_time": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "description": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Some proposal description"
+                },
+                "height": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 100
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 321
+                },
+                "metadata": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "metadata"
+                },
+                "no": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "no_addrs": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "no_vals": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "no_voting_power": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "1000000000"
+                },
+                "no_with_veto": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "no_with_veto_addrs": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "no_with_veto_vals": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "no_with_veto_voting_power": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "1000000000"
+                },
+                "proposer": {
+                    "$ref": "#/definitions/responses.ShortAddress"
+                },
+                "status": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "active"
+                },
+                "title": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Proposal title"
+                },
+                "type": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "param_changed"
+                },
+                "votes_count": {
+                    "type": "integer",
+                    "example": 12354
+                },
+                "voting_power": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "1000000000"
+                },
+                "yes": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "yes_addrs": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "yes_vals": {
+                    "type": "integer",
+                    "example": 1234
+                },
+                "yes_voting_power": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "1000000000"
                 }
             }
         },
@@ -6140,8 +7765,7 @@
                     "example": "2023-07-04T03:10:57+00:00"
                 },
                 "delegator": {
-                    "type": "string",
-                    "example": "celestia1jc92qdnty48pafummfr8ava2tjtuhfdw774w60"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "destination": {
                     "$ref": "#/definitions/responses.ShortValidator"
@@ -6166,6 +7790,26 @@
                     "type": "string",
                     "format": "string",
                     "example": "https://github.com/account"
+                },
+                "category": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "nft"
+                },
+                "color": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "#123456"
+                },
+                "compression": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "zip"
+                },
+                "defi_lama": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Manta"
                 },
                 "description": {
                     "type": "string",
@@ -6208,6 +7852,16 @@
                     "format": "string",
                     "example": "Rollup name"
                 },
+                "provider": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "name"
+                },
+                "settled_on": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Ethereum"
+                },
                 "slug": {
                     "type": "string",
                     "format": "string",
@@ -6218,10 +7872,26 @@
                     "format": "string",
                     "example": "op_stack"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "twitter": {
                     "type": "string",
                     "format": "string",
                     "example": "https://x.com/account"
+                },
+                "type": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "settled"
+                },
+                "vm": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "evm"
                 },
                 "website": {
                     "type": "string",
@@ -6257,11 +7927,47 @@
                     "type": "integer",
                     "format": "integer",
                     "example": 123
+                }
+            }
+        },
+        "responses.RollupAllSeriesResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/responses.RollupAllSeriesItem"
+                    }
                 },
                 "time": {
                     "type": "string",
                     "format": "date-time",
                     "example": "2023-07-04T03:10:57+00:00"
+                }
+            }
+        },
+        "responses.RollupGroupedStats": {
+            "type": "object",
+            "properties": {
+                "blobs_count": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 2
+                },
+                "fee": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "123.456789"
+                },
+                "group": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "group"
+                },
+                "size": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 1000
                 }
             }
         },
@@ -6323,6 +8029,26 @@
                     "format": "string",
                     "example": "https://github.com/account"
                 },
+                "category": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "nft"
+                },
+                "color": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "#123456"
+                },
+                "compression": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "zip"
+                },
+                "defi_lama": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Manta"
+                },
                 "description": {
                     "type": "string",
                     "format": "string",
@@ -6378,6 +8104,16 @@
                     "format": "integer",
                     "example": 100
                 },
+                "provider": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "name"
+                },
+                "settled_on": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Ethereum"
+                },
                 "slug": {
                     "type": "string",
                     "format": "string",
@@ -6408,6 +8144,16 @@
                     "format": "string",
                     "example": "https://x.com/account"
                 },
+                "type": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "settled"
+                },
+                "vm": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "evm"
+                },
                 "website": {
                     "type": "string",
                     "format": "string",
@@ -6432,6 +8178,31 @@
                     "type": "string",
                     "format": "string",
                     "example": "https://github.com/account"
+                },
+                "category": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "nft"
+                },
+                "color": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "#123456"
+                },
+                "compression": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "zip"
+                },
+                "da_pct": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 0.9876
+                },
+                "defi_lama": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Manta"
                 },
                 "description": {
                     "type": "string",
@@ -6468,6 +8239,11 @@
                     "format": "integer",
                     "example": 321
                 },
+                "is_active": {
+                    "type": "boolean",
+                    "format": "boolean",
+                    "example": true
+                },
                 "l2_beat": {
                     "type": "string",
                     "format": "string",
@@ -6494,6 +8270,16 @@
                     "format": "string",
                     "example": "Rollup name"
                 },
+                "provider": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "name"
+                },
+                "settled_on": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Ethereum"
+                },
                 "size": {
                     "type": "integer",
                     "format": "integer",
@@ -6514,10 +8300,26 @@
                     "format": "string",
                     "example": "op_stack"
                 },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "twitter": {
                     "type": "string",
                     "format": "string",
                     "example": "https://x.com/account"
+                },
+                "type": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "settled"
+                },
+                "vm": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "evm"
                 },
                 "website": {
                     "type": "string",
@@ -6561,6 +8363,38 @@
                     "type": "string",
                     "format": "string",
                     "example": "0.17632"
+                }
+            }
+        },
+        "responses.ShortAddress": {
+            "type": "object",
+            "properties": {
+                "celestials": {
+                    "$ref": "#/definitions/responses.Celestial"
+                },
+                "hash": {
+                    "type": "string",
+                    "example": "celestia1jc92qdnty48pafummfr8ava2tjtuhfdw774w60"
+                }
+            }
+        },
+        "responses.ShortIbcClient": {
+            "type": "object",
+            "properties": {
+                "chain_id": {
+                    "type": "string",
+                    "format": "binary",
+                    "example": "osmosis-1"
+                },
+                "id": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "client-1"
+                },
+                "type": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "client"
                 }
             }
         },
@@ -6616,6 +8450,31 @@
                 "signed": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "responses.SizeGroup": {
+            "type": "object",
+            "properties": {
+                "avg_size": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 123
+                },
+                "count": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 123
+                },
+                "name": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "Rollup name"
+                },
+                "size": {
+                    "type": "integer",
+                    "format": "integer",
+                    "example": 123
                 }
             }
         },
@@ -6680,6 +8539,21 @@
                     "type": "string",
                     "format": "string",
                     "example": "312"
+                },
+                "total_ibc_clients": {
+                    "type": "integer",
+                    "format": "string",
+                    "example": 312
+                },
+                "total_namespaces": {
+                    "type": "integer",
+                    "format": "string",
+                    "example": 312
+                },
+                "total_proposals": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 56789
                 },
                 "total_stake": {
                     "type": "string",
@@ -6830,7 +8704,7 @@
                 "signers": {
                     "type": "array",
                     "items": {
-                        "type": "string"
+                        "$ref": "#/definitions/responses.ShortAddress"
                     }
                 },
                 "status": {
@@ -6903,8 +8777,7 @@
                     "example": "2023-07-04T03:10:57+00:00"
                 },
                 "delegator": {
-                    "type": "string",
-                    "example": "celestia1jc92qdnty48pafummfr8ava2tjtuhfdw774w60"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "height": {
                     "type": "integer",
@@ -6923,8 +8796,7 @@
             "type": "object",
             "properties": {
                 "address": {
-                    "type": "string",
-                    "example": "celestiavaloper1un77nfm6axkhkupe8fk4xl6fd4adz3y59fucpu"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "commissions": {
                     "type": "string",
@@ -6939,8 +8811,7 @@
                     "example": "security@0xfury.com"
                 },
                 "delegator": {
-                    "type": "string",
-                    "example": "celestia1un77nfm6axkhkupe8fk4xl6fd4adz3y5qk7ph6"
+                    "$ref": "#/definitions/responses.ShortAddress"
                 },
                 "details": {
                     "type": "string",
@@ -7089,6 +8960,52 @@
                     "type": "string",
                     "format": "date-time",
                     "example": "2023-07-04T03:10:57+00:00"
+                }
+            }
+        },
+        "responses.Vote": {
+            "type": "object",
+            "properties": {
+                "deposit_time": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2023-07-04T03:10:57+00:00"
+                },
+                "height": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 100
+                },
+                "id": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 321
+                },
+                "proposal_id": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 2
+                },
+                "status": {
+                    "type": "string",
+                    "format": "string",
+                    "example": "yes"
+                },
+                "validator": {
+                    "$ref": "#/definitions/responses.ShortValidator"
+                },
+                "voter": {
+                    "$ref": "#/definitions/responses.ShortAddress"
+                },
+                "voter_id": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 1
+                },
+                "weight": {
+                    "type": "integer",
+                    "format": "int64",
+                    "example": 12345678
                 }
             }
         },
@@ -7341,6 +9258,9 @@
                 "MsgUpdateClient",
                 "MsgUpgradeClient",
                 "MsgSubmitMisbehaviour",
+                "MsgRecoverClient",
+                "MsgIBCSoftwareUpgrade",
+                "MsgUpdateParams",
                 "MsgConnectionOpenInit",
                 "MsgConnectionOpenTry",
                 "MsgConnectionOpenAck",
@@ -7354,7 +9274,19 @@
                 "MsgRecvPacket",
                 "MsgTimeout",
                 "MsgTimeoutOnClose",
-                "MsgAcknowledgement"
+                "MsgAcknowledgement",
+                "MsgSignalVersion",
+                "MsgTryUpgrade",
+                "MsgCreateMailbox",
+                "MsgProcessMessage",
+                "MsgSetMailbox",
+                "MsgCreateCollateralToken",
+                "MsgCreateSyntheticToken",
+                "MsgSetToken",
+                "MsgEnrollRemoteRouter",
+                "MsgUnrollRemoteRouter",
+                "MsgRemoteTransfer",
+                "MsgUpdateMinfeeParams"
             ],
             "x-enum-varnames": [
                 "MsgUnknown",
@@ -7417,6 +9349,9 @@
                 "MsgUpdateClient",
                 "MsgUpgradeClient",
                 "MsgSubmitMisbehaviour",
+                "MsgRecoverClient",
+                "MsgIBCSoftwareUpgrade",
+                "MsgUpdateParams",
                 "MsgConnectionOpenInit",
                 "MsgConnectionOpenTry",
                 "MsgConnectionOpenAck",
@@ -7430,7 +9365,19 @@
                 "MsgRecvPacket",
                 "MsgTimeout",
                 "MsgTimeoutOnClose",
-                "MsgAcknowledgement"
+                "MsgAcknowledgement",
+                "MsgSignalVersion",
+                "MsgTryUpgrade",
+                "MsgCreateMailbox",
+                "MsgProcessMessage",
+                "MsgSetMailbox",
+                "MsgCreateCollateralToken",
+                "MsgCreateSyntheticToken",
+                "MsgSetToken",
+                "MsgEnrollRemoteRouter",
+                "MsgUnrollRemoteRouter",
+                "MsgRemoteTransfer",
+                "MsgUpdateMinfeeParams"
             ]
         }
     },

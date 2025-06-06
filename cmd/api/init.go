@@ -26,7 +26,6 @@ import (
 	"github.com/celenium-io/celestia-indexer/pkg/node/rpc"
 	"github.com/dipdup-net/go-lib/config"
 	"github.com/getsentry/sentry-go"
-	sentryotel "github.com/getsentry/sentry-go/otel"
 	"github.com/grafana/pyroscope-go"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
@@ -34,8 +33,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"golang.org/x/time/rate"
 
 	"github.com/MarceloPetrucio/go-scalar-api-reference"
@@ -108,7 +105,7 @@ func websocketSkipper(c echo.Context) bool {
 }
 
 func metricsSkipper(c echo.Context) bool {
-	return c.Path() == "/v1/metrics"
+	return c.Path() == "/metrics"
 }
 
 func postSkipper(c echo.Context) bool {
@@ -156,7 +153,7 @@ func observableCacheSkipper(c echo.Context) bool {
 	return false
 }
 
-func initEcho(cfg ApiConfig, db postgres.Storage, env string) *echo.Echo {
+func initEcho(cfg ApiConfig, env string) *echo.Echo {
 	e := echo.New()
 	e.Validator = handler.NewCelestiaApiValidator()
 
@@ -239,7 +236,7 @@ func initEcho(cfg ApiConfig, db postgres.Storage, env string) *echo.Echo {
 
 	}
 
-	if err := initSentry(e, db, cfg.SentryDsn, env); err != nil {
+	if err := initSentry(e, cfg.SentryDsn, env); err != nil {
 		log.Err(err).Msg("sentry")
 	}
 	e.Server.IdleTimeout = time.Second * 30
@@ -250,7 +247,7 @@ func initEcho(cfg ApiConfig, db postgres.Storage, env string) *echo.Echo {
 var dispatcher *bus.Dispatcher
 
 func initDispatcher(ctx context.Context, db postgres.Storage) {
-	d, err := bus.NewDispatcher(db, db.Blocks, db.Validator)
+	d, err := bus.NewDispatcher(db, db.Validator)
 	if err != nil {
 		panic(err)
 	}
@@ -261,32 +258,53 @@ func initDispatcher(ctx context.Context, db postgres.Storage) {
 func initDatabase(cfg config.Database, viewsDir string) postgres.Storage {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	db, err := postgres.Create(ctx, cfg, viewsDir)
+	db, err := postgres.Create(ctx, cfg, viewsDir, false)
 	if err != nil {
 		panic(err)
 	}
 	return db
 }
 
-func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Storage) {
-	ttlCache, err := cache.NewTTLCache(time.Minute * 30)
-	if err != nil {
-		panic(err)
+var ttlCache cache.ICache
+
+func initCache(url string) {
+	if url != "" {
+		c, err := cache.NewValKey(url, time.Hour)
+		if err != nil {
+			panic(err)
+		}
+		ttlCache = c
 	}
-	ttlCacheMiddleware := cache.Middleware(ttlCache, nil)
+}
+
+func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Storage) {
+	if cfg.ApiConfig.Prometheus {
+		e.GET("/metrics", echoprometheus.NewHandler())
+	}
 
 	v1 := e.Group("v1")
 
 	stateHandlers := handler.NewStateHandler(db.State, db.Validator, cfg.Indexer.Name)
 	v1.GET("/head", stateHandlers.Head)
-	constantsHandler := handler.NewConstantHandler(db.Constants, db.DenomMetadata, db.Address)
-	v1.GET("/constants", constantsHandler.Get)
-	v1.GET("/enums", constantsHandler.Enums)
 
-	searchHandler := handler.NewSearchHandler(db.Search, db.Address, db.Blocks, db.Tx, db.Namespace, db.Validator, db.Rollup)
+	defaultMiddlewareCache := cache.Middleware(ttlCache, nil, nil)
+	statsMiddlewareCache := cache.Middleware(ttlCache, nil, func() time.Duration {
+		now := time.Now()
+		diff := now.Truncate(time.Hour).Add(time.Hour).Sub(now)
+		if diff > time.Minute*10 {
+			return time.Minute * 10
+		}
+		return diff
+	})
+
+	constantsHandler := handler.NewConstantHandler(db.Constants, db.DenomMetadata, db.Rollup)
+	v1.GET("/constants", constantsHandler.Get, defaultMiddlewareCache)
+	v1.GET("/enums", constantsHandler.Enums, defaultMiddlewareCache)
+
+	searchHandler := handler.NewSearchHandler(db.Search, db.Address, db.Blocks, db.Tx, db.Namespace, db.Validator, db.Rollup, db.Celestials)
 	v1.GET("/search", searchHandler.Search)
 
-	addressHandlers := handler.NewAddressHandler(db.Address, db.Tx, db.BlobLogs, db.Message, db.Delegation, db.Undelegation, db.Redelegation, db.VestingAccounts, db.Grants, db.State, cfg.Indexer.Name)
+	addressHandlers := handler.NewAddressHandler(db.Address, db.Tx, db.BlobLogs, db.Message, db.Delegation, db.Undelegation, db.Redelegation, db.VestingAccounts, db.Grants, db.Celestials, db.Votes, db.State, cfg.Indexer.Name)
 	addressesGroup := v1.Group("/address")
 	{
 		addressesGroup.GET("", addressHandlers.List)
@@ -303,7 +321,9 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 			addressGroup.GET("/vestings", addressHandlers.Vestings)
 			addressGroup.GET("/grants", addressHandlers.Grants)
 			addressGroup.GET("/granters", addressHandlers.Grantee)
-			addressGroup.GET("/stats/:name/:timeframe", addressHandlers.Stats)
+			addressGroup.GET("/celestials", addressHandlers.Celestials)
+			addressGroup.GET("/votes", addressHandlers.Votes)
+			addressGroup.GET("/stats/:name/:timeframe", addressHandlers.Stats, statsMiddlewareCache)
 		}
 	}
 	ds, ok := cfg.DataSources["node_rpc"]
@@ -319,13 +339,13 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 		blockGroup.GET("/count", blockHandlers.Count)
 		heightGroup := blockGroup.Group("/:height")
 		{
-			heightGroup.GET("", blockHandlers.Get, ttlCacheMiddleware)
-			heightGroup.GET("/events", blockHandlers.GetEvents, ttlCacheMiddleware)
-			heightGroup.GET("/messages", blockHandlers.GetMessages, ttlCacheMiddleware)
-			heightGroup.GET("/stats", blockHandlers.GetStats, ttlCacheMiddleware)
-			heightGroup.GET("/blobs", blockHandlers.Blobs, ttlCacheMiddleware)
-			heightGroup.GET("/blobs/count", blockHandlers.BlobsCount, ttlCacheMiddleware)
-			heightGroup.GET("/ods", blockHandlers.BlockODS, ttlCacheMiddleware)
+			heightGroup.GET("", blockHandlers.Get, defaultMiddlewareCache)
+			heightGroup.GET("/events", blockHandlers.GetEvents, defaultMiddlewareCache)
+			heightGroup.GET("/messages", blockHandlers.GetMessages, defaultMiddlewareCache)
+			heightGroup.GET("/stats", blockHandlers.GetStats, defaultMiddlewareCache)
+			heightGroup.GET("/blobs", blockHandlers.Blobs, defaultMiddlewareCache)
+			heightGroup.GET("/blobs/count", blockHandlers.BlobsCount, defaultMiddlewareCache)
+			heightGroup.GET("/ods", blockHandlers.BlockODS, defaultMiddlewareCache)
 		}
 	}
 
@@ -334,14 +354,14 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 	{
 		txGroup.GET("", txHandlers.List)
 		txGroup.GET("/count", txHandlers.Count)
-		txGroup.GET("/genesis", txHandlers.Genesis)
+		txGroup.GET("/genesis", txHandlers.Genesis, defaultMiddlewareCache)
 		hashGroup := txGroup.Group("/:hash")
 		{
-			hashGroup.GET("", txHandlers.Get, ttlCacheMiddleware)
-			hashGroup.GET("/events", txHandlers.GetEvents, ttlCacheMiddleware)
-			hashGroup.GET("/messages", txHandlers.GetMessages, ttlCacheMiddleware)
-			hashGroup.GET("/blobs", txHandlers.Blobs, ttlCacheMiddleware)
-			hashGroup.GET("/blobs/count", txHandlers.BlobsCount, ttlCacheMiddleware)
+			hashGroup.GET("", txHandlers.Get, defaultMiddlewareCache)
+			hashGroup.GET("/events", txHandlers.GetEvents, defaultMiddlewareCache)
+			hashGroup.GET("/messages", txHandlers.GetMessages, defaultMiddlewareCache)
+			hashGroup.GET("/blobs", txHandlers.Blobs, defaultMiddlewareCache)
+			hashGroup.GET("/blobs/count", txHandlers.BlobsCount, defaultMiddlewareCache)
 		}
 	}
 
@@ -350,20 +370,28 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 		panic(err)
 	}
 
-	namespaceHandlers := handler.NewNamespaceHandler(db.Namespace, db.BlobLogs, db.Rollup, db.Address, db.State, cfg.Indexer.Name, blobReceiver)
+	namespaceHandlers := handler.NewNamespaceHandler(
+		db.Namespace,
+		db.BlobLogs,
+		db.Rollup,
+		db.Address,
+		db.State,
+		cfg.Indexer.Name,
+		blobReceiver,
+		&node,
+	)
 
 	blobGroup := v1.Group("/blob")
 	{
 		blobGroup.GET("", namespaceHandlers.Blobs)
 		blobGroup.POST("", namespaceHandlers.Blob)
 		blobGroup.POST("/metadata", namespaceHandlers.BlobMetadata)
+		blobGroup.POST("/proofs", namespaceHandlers.BlobProofs)
 	}
 
 	namespaceGroup := v1.Group("/namespace")
 	{
 		namespaceGroup.GET("", namespaceHandlers.List)
-		namespaceGroup.GET("/count", namespaceHandlers.Count)
-		namespaceGroup.GET("/active", namespaceHandlers.GetActive)
 		namespaceGroup.GET("/:id", namespaceHandlers.Get)
 		namespaceGroup.GET("/:id/:version", namespaceHandlers.GetWithVersion)
 		namespaceGroup.GET("/:id/:version/messages", namespaceHandlers.GetMessages)
@@ -377,7 +405,7 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 		namespaceByHash.GET("/:hash/:height", namespaceHandlers.GetBlobs)
 	}
 
-	validatorsHandler := handler.NewValidatorHandler(db.Validator, db.Blocks, db.BlockSignatures, db.Delegation, db.Constants, db.Jails, db.State, cfg.Indexer.Name)
+	validatorsHandler := handler.NewValidatorHandler(db.Validator, db.Blocks, db.BlockSignatures, db.Delegation, db.Constants, db.Jails, db.Votes, db.State, cfg.Indexer.Name)
 	validators := v1.Group("/validators")
 	{
 		validators.GET("", validatorsHandler.List)
@@ -389,10 +417,11 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 			validator.GET("/uptime", validatorsHandler.Uptime)
 			validator.GET("/delegators", validatorsHandler.Delegators)
 			validator.GET("/jails", validatorsHandler.Jails)
+			validator.GET("/votes", validatorsHandler.Votes)
 		}
 	}
 
-	statsHandler := handler.NewStatsHandler(db.Stats, db.Namespace, db.Price, db.State)
+	statsHandler := handler.NewStatsHandler(db.Stats, db.Namespace, db.IbcTransfers, db.IbcChannels, db.State)
 	stats := v1.Group("/stats")
 	{
 		stats.GET("/summary/:table/:function", statsHandler.Summary)
@@ -401,26 +430,26 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 		stats.GET("/rollup_stats_24h", statsHandler.RollupStats24h)
 		stats.GET("/square_size", statsHandler.SquareSize)
 		stats.GET("/messages_count_24h", statsHandler.MessagesCount24h)
-
-		price := stats.Group("/price")
-		{
-			price.GET("/current", statsHandler.PriceCurrent)
-			price.GET("/series/:timeframe", statsHandler.PriceSeries)
-		}
+		stats.GET("/size_groups", statsHandler.SizeGroups, statsMiddlewareCache)
 
 		namespace := stats.Group("/namespace")
 		{
 			namespace.GET("/usage", statsHandler.NamespaceUsage)
-			namespace.GET("/series/:id/:name/:timeframe", statsHandler.NamespaceSeries)
+			namespace.GET("/series/:id/:name/:timeframe", statsHandler.NamespaceSeries, statsMiddlewareCache)
 		}
 		staking := stats.Group("/staking")
 		{
-			staking.GET("/series/:id/:name/:timeframe", statsHandler.StakingSeries)
+			staking.GET("/series/:id/:name/:timeframe", statsHandler.StakingSeries, statsMiddlewareCache)
+		}
+		ibc := stats.Group("/ibc")
+		{
+			ibc.GET("/series/:id/:name/:timeframe", statsHandler.IbcSeries, statsMiddlewareCache)
+			ibc.GET("/chains", statsHandler.IbcByChains, statsMiddlewareCache)
 		}
 		series := stats.Group("/series")
 		{
-			series.GET("/:name/:timeframe", statsHandler.Series)
-			series.GET("/:name/:timeframe/cumulative", statsHandler.SeriesCumulative)
+			series.GET("/:name/:timeframe", statsHandler.Series, statsMiddlewareCache)
+			series.GET("/:name/:timeframe/cumulative", statsHandler.SeriesCumulative, statsMiddlewareCache)
 		}
 	}
 
@@ -429,6 +458,7 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 	{
 		gas.GET("/estimate_for_pfb", gasHandler.EstimateForPfb)
 		gas.GET("/price", gasHandler.EstimatePrice)
+		gas.GET("/price/:priority", gasHandler.EstimatePricePriority)
 	}
 
 	vestingHandler := handler.NewVestingHandler(db.VestingPeriods)
@@ -437,8 +467,37 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 		vesting.GET("/:id/periods", vestingHandler.Periods)
 	}
 
-	if cfg.ApiConfig.Prometheus {
-		v1.GET("/metrics", echoprometheus.NewHandler())
+	proposalHandler := handler.NewProposalsHandler(db.Proposals, db.Votes, db.Address)
+	proposal := v1.Group("/proposal")
+	{
+		proposal.GET("", proposalHandler.List)
+		proposal.GET("/:id", proposalHandler.Get)
+		proposal.GET("/:id/votes", proposalHandler.Votes)
+	}
+
+	ibcHandler := handler.NewIbcHandler(db.IbcClients, db.IbcConnections, db.IbcChannels, db.IbcTransfers, db.Address)
+	ibc := v1.Group("/ibc")
+	{
+		ibcClient := ibc.Group("/client")
+		{
+			ibcClient.GET("", ibcHandler.List)
+			ibcClient.GET("/:id", ibcHandler.Get)
+		}
+		ibcConnection := ibc.Group("/connection")
+		{
+			ibcConnection.GET("", ibcHandler.ListConnections)
+			ibcConnection.GET("/:id", ibcHandler.GetConnection)
+		}
+		ibcChannel := ibc.Group("/channel")
+		{
+			ibcChannel.GET("", ibcHandler.ListChannels)
+			ibcChannel.GET("/:id", ibcHandler.GetChannel)
+		}
+
+		ibcTransfer := ibc.Group("/transfer")
+		{
+			ibcTransfer.GET("", ibcHandler.ListTransfers)
+		}
 	}
 
 	htmlContent, err := scalar.ApiReferenceHTML(&scalar.Options{
@@ -481,34 +540,37 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 		rollups.GET("", rollupHandler.Leaderboard)
 		rollups.GET("/count", rollupHandler.Count)
 		rollups.GET("/day", rollupHandler.LeaderboardDay)
-		rollups.GET("/stats/series", rollupHandler.AllSeries)
+		rollups.GET("/group", rollupHandler.RollupGroupedStats, statsMiddlewareCache)
+		rollups.GET("/stats/series/:timeframe", rollupHandler.AllSeries, statsMiddlewareCache)
 		rollups.GET("/slug/:slug", rollupHandler.BySlug)
 		rollup := rollups.Group("/:id")
 		{
 			rollup.GET("", rollupHandler.Get)
 			rollup.GET("/namespaces", rollupHandler.GetNamespaces)
 			rollup.GET("/blobs", rollupHandler.GetBlobs)
-			rollup.GET("/stats/:name/:timeframe", rollupHandler.Stats)
-			rollup.GET("/distribution/:name/:timeframe", rollupHandler.Distribution)
+			rollup.GET("/stats/:name/:timeframe", rollupHandler.Stats, statsMiddlewareCache)
+			rollup.GET("/distribution/:name/:timeframe", rollupHandler.Distribution, statsMiddlewareCache)
 			rollup.GET("/export", rollupHandler.ExportBlobs)
 		}
 	}
 
 	auth := v1.Group("/auth")
 	{
+		keyValidator := handler.NewKeyValidator(db.ApiKeys, db.BlobLogs)
 		keyMiddleware := middleware.KeyAuthWithConfig(middleware.KeyAuthConfig{
 			KeyLookup: "header:Authorization",
-			Validator: func(key string, c echo.Context) (bool, error) {
-				return key == os.Getenv("API_AUTH_KEY"), nil
-			},
+			Validator: keyValidator.Validate,
 		})
+		adminMiddleware := AdminMiddleware()
 
 		rollupAuthHandler := handler.NewRollupAuthHandler(db.Rollup, db.Address, db.Namespace, db.Transactable)
 		rollup := auth.Group("/rollup")
 		{
 			rollup.POST("/new", rollupAuthHandler.Create, keyMiddleware)
 			rollup.PATCH("/:id", rollupAuthHandler.Update, keyMiddleware)
-			rollup.DELETE("/:id", rollupAuthHandler.Delete, keyMiddleware)
+			rollup.DELETE("/:id", rollupAuthHandler.Delete, keyMiddleware, adminMiddleware)
+			rollup.PATCH("/:id/verify", rollupAuthHandler.Verify, keyMiddleware, adminMiddleware)
+			rollup.GET("/unverified", rollupAuthHandler.Unverified, keyMiddleware, adminMiddleware)
 		}
 	}
 
@@ -518,19 +580,18 @@ func initHandlers(ctx context.Context, e *echo.Echo, cfg Config, db postgres.Sto
 	}
 }
 
-func initSentry(e *echo.Echo, db postgres.Storage, dsn, environment string) error {
+func initSentry(e *echo.Echo, dsn, environment string) error {
 	if dsn == "" {
 		return nil
 	}
 
 	if err := sentry.Init(sentry.ClientOptions{
-		Dsn:                dsn,
-		AttachStacktrace:   true,
-		Environment:        environment,
-		EnableTracing:      true,
-		TracesSampleRate:   0.5,
-		ProfilesSampleRate: 0.25,
-		Release:            os.Getenv("TAG"),
+		Dsn:              dsn,
+		AttachStacktrace: true,
+		Environment:      environment,
+		EnableTracing:    true,
+		TracesSampleRate: 0.1,
+		Release:          os.Getenv("TAG"),
 		IgnoreTransactions: []string{
 			"GET /v1/ws",
 		},
@@ -538,22 +599,13 @@ func initSentry(e *echo.Echo, db postgres.Storage, dsn, environment string) erro
 		return errors.Wrap(err, "initialization")
 	}
 
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSpanProcessor(sentryotel.NewSentrySpanProcessor()),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(sentryotel.NewSentryPropagator())
-
-	db.SetTracer(tp)
-
 	e.Use(SentryMiddleware())
 
 	return nil
 }
 
 var (
-	wsManager     *websocket.Manager
-	endpointCache *cache.ObservableCache
+	wsManager *websocket.Manager
 )
 
 func initWebsocket(ctx context.Context, group *echo.Group) {
@@ -564,15 +616,6 @@ func initWebsocket(ctx context.Context, group *echo.Group) {
 	}
 	wsManager.Start(ctx)
 	group.GET("/ws", wsManager.Handle)
-}
-
-func initObservableCache(ctx context.Context, e *echo.Echo) {
-	observer := dispatcher.Observe(storage.ChannelHead)
-	endpointCache = cache.NewObservableCache(cache.Config{
-		MaxEntitiesCount: 1000,
-	}, observer)
-	e.Use(cache.Middleware(endpointCache, observableCacheSkipper))
-	endpointCache.Start(ctx)
 }
 
 var gasTracker *gas.Tracker

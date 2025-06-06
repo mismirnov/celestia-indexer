@@ -16,18 +16,20 @@ import (
 )
 
 type StatsHandler struct {
-	repo   storage.IStats
-	nsRepo storage.INamespace
-	price  storage.IPrice
-	state  storage.IState
+	repo        storage.IStats
+	nsRepo      storage.INamespace
+	ibc         storage.IIbcTransfer
+	ibcChannels storage.IIbcChannel
+	state       storage.IState
 }
 
-func NewStatsHandler(repo storage.IStats, nsRepo storage.INamespace, price storage.IPrice, state storage.IState) StatsHandler {
+func NewStatsHandler(repo storage.IStats, nsRepo storage.INamespace, ibc storage.IIbcTransfer, ibcChannels storage.IIbcChannel, state storage.IState) StatsHandler {
 	return StatsHandler{
-		repo:   repo,
-		nsRepo: nsRepo,
-		price:  price,
-		state:  state,
+		repo:        repo,
+		nsRepo:      nsRepo,
+		state:       state,
+		ibc:         ibc,
+		ibcChannels: ibcChannels,
 	}
 }
 
@@ -330,76 +332,6 @@ func (sh StatsHandler) NamespaceSeries(c echo.Context) error {
 	return returnArray(c, response)
 }
 
-type priceSeriesRequest struct {
-	Timeframe string `example:"hour"       param:"timeframe" swaggertype:"string"  validate:"required,oneof=1m 1h 1d"`
-	From      int64  `example:"1692892095" query:"from"      swaggertype:"integer" validate:"omitempty,min=1"`
-	To        int64  `example:"1692892095" query:"to"        swaggertype:"integer" validate:"omitempty,min=1"`
-}
-
-// PriceSeries godoc
-//
-//	@Summary		Get histogram with TIA price
-//	@Description	Get histogram with TIA price
-//	@Tags			stats
-//	@ID				stats-price-series
-//	@Param			timeframe	path	string	true	"Timeframe"						Enums(1m, 1h, 1d)
-//	@Param			from		query	integer	false	"Time from in unix timestamp"	mininum(1)
-//	@Param			to			query	integer	false	"Time to in unix timestamp"		mininum(1)
-//	@Produce		json
-//	@Success		200	{array}		responses.Price
-//	@Failure		400	{object}	Error
-//	@Failure		500	{object}	Error
-//	@Router			/stats/price/series/{timeframe} [get]
-func (sh StatsHandler) PriceSeries(c echo.Context) error {
-	req, err := bindAndValidate[priceSeriesRequest](c)
-	if err != nil {
-		return badRequestError(c, err)
-	}
-
-	var (
-		from time.Time
-		to   time.Time
-	)
-
-	if req.From > 0 {
-		from = time.Unix(req.From, 0).UTC()
-	}
-	if req.To > 0 {
-		to = time.Unix(req.To, 0).UTC()
-	}
-
-	histogram, err := sh.price.Get(c.Request().Context(), req.Timeframe, from, to, 100)
-	if err != nil {
-		return handleError(c, err, sh.nsRepo)
-	}
-
-	response := make([]responses.Price, len(histogram))
-	for i := range histogram {
-		response[i] = responses.NewPrice(histogram[i])
-	}
-	return returnArray(c, response)
-}
-
-// PriceCurrent godoc
-//
-//	@Summary		Get current TIA price
-//	@Description	Get current TIA price
-//	@Tags			stats
-//	@ID				stats-price-current
-//	@Produce		json
-//	@Success		200	{object}	responses.Price
-//	@Failure		400	{object}	Error
-//	@Failure		500	{object}	Error
-//	@Router			/stats/price/current [get]
-func (sh StatsHandler) PriceCurrent(c echo.Context) error {
-	price, err := sh.price.Last(c.Request().Context())
-	if err != nil {
-		return handleError(c, err, sh.nsRepo)
-	}
-
-	return c.JSON(http.StatusOK, responses.NewPrice(price))
-}
-
 type stakingSeriesRequest struct {
 	Id         uint64 `example:"123"        param:"id"        swaggertype:"integer" validate:"required,min=1"`
 	Timeframe  string `example:"hour"       param:"timeframe" swaggertype:"string"  validate:"required,oneof=hour day month"`
@@ -444,6 +376,101 @@ func (sh StatsHandler) StakingSeries(c echo.Context) error {
 	response := make([]responses.SeriesItem, len(histogram))
 	for i := range histogram {
 		response[i] = responses.NewSeriesItem(histogram[i])
+	}
+	return returnArray(c, response)
+}
+
+type ibcSeriesRequest struct {
+	Id         string            `example:"channel-1"  param:"id"        swaggertype:"string"  validate:"required"`
+	Timeframe  storage.Timeframe `example:"hour"       param:"timeframe" swaggertype:"string"  validate:"required,oneof=hour day month"`
+	SeriesName string            `example:"size"       param:"name"      swaggertype:"string"  validate:"required,oneof=count amount"`
+	From       int64             `example:"1692892095" query:"from"      swaggertype:"integer" validate:"omitempty,min=1"`
+	To         int64             `example:"1692892095" query:"to"        swaggertype:"integer" validate:"omitempty,min=1"`
+}
+
+// IbcSeries godoc
+//
+//	@Summary		Get histogram for ibc channels with precomputed stats
+//	@Description	Get histogram for ibc channels with precomputed stats by series name and timeframe
+//	@Tags			stats
+//	@ID				stats-ibc-series
+//	@Param			id			path	string	true	"Channel id"
+//	@Param			timeframe	path	string	true	"Timeframe"						Enums(hour, day, month)
+//	@Param			name		path	string	true	"Series name"					Enums(count, amount)
+//	@Param			from		query	integer	false	"Time from in unix timestamp"	mininum(1)
+//	@Param			to			query	integer	false	"Time to in unix timestamp"		mininum(1)
+//	@Produce		json
+//	@Success		200	{array}		responses.HistogramItem
+//	@Failure		400	{object}	Error
+//	@Failure		500	{object}	Error
+//	@Router			/stats/ibc/series/{id}/{name}/{timeframe} [get]
+func (sh StatsHandler) IbcSeries(c echo.Context) error {
+	req, err := bindAndValidate[ibcSeriesRequest](c)
+	if err != nil {
+		return badRequestError(c, err)
+	}
+
+	histogram, err := sh.ibc.Series(
+		c.Request().Context(),
+		req.Id,
+		req.Timeframe,
+		req.SeriesName,
+		storage.NewSeriesRequest(req.From, req.To),
+	)
+	if err != nil {
+		return handleError(c, err, sh.nsRepo)
+	}
+
+	response := make([]responses.HistogramItem, len(histogram))
+	for i := range histogram {
+		response[i] = responses.NewHistogramItem(histogram[i])
+	}
+	return returnArray(c, response)
+}
+
+type ibcByChainsRequest struct {
+	Limit  int `query:"limit"  validate:"omitempty,min=1,max=100"`
+	Offset int `query:"offset" validate:"omitempty,min=0"`
+}
+
+func (req *ibcByChainsRequest) SetDefault() {
+	if req.Limit <= 0 {
+		req.Limit = 10
+	}
+}
+
+// IbcByChains godoc
+//
+//	@Summary		Get stats for ibc channels splitted by chains
+//	@Description	Get stats for ibc channels splitted by chains
+//	@Tags			stats
+//	@ID				stats-ibc-chains
+//	@Param			limit				query	integer			false	"Count of requested entities"	mininum(1)	maximum(100)
+//	@Param			offset				query	integer			false	"Offset"						mininum(1)
+//	@Produce		json
+//	@Success		200	{array}		responses.IbcChainStats
+//	@Failure		400	{object}	Error
+//	@Failure		500	{object}	Error
+//	@Router			/stats/ibc/chains [get]
+func (sh StatsHandler) IbcByChains(c echo.Context) error {
+	req, err := bindAndValidate[ibcByChainsRequest](c)
+	if err != nil {
+		return badRequestError(c, err)
+	}
+	req.SetDefault()
+
+	stats, err := sh.ibcChannels.StatsByChain(
+		c.Request().Context(),
+		req.Limit,
+		req.Offset,
+	)
+	if err != nil {
+		return handleError(c, err, sh.nsRepo)
+	}
+
+	response := make([]responses.IbcChainStats, len(stats))
+	for i := range stats {
+		response[i] = responses.NewIbcChainStats(stats[i])
 	}
 	return returnArray(c, response)
 }
@@ -541,6 +568,32 @@ func (sh StatsHandler) MessagesCount24h(c echo.Context) error {
 	response := make([]responses.CountItem, len(items))
 	for i := range items {
 		response[i] = responses.NewCountItem(items[i])
+	}
+	return returnArray(c, response)
+}
+
+// SizeGroups godoc
+//
+//	@Summary		Get blobs count grouped by size
+//	@Description	Get blobs count grouped by size
+//	@Tags			stats
+//	@ID				stats-size-groups
+//	@Produce		json
+//	@Success		200	{array}		responses.SizeGroup
+//	@Failure		500	{object}	Error
+//	@Router			/stats/size_groups [get]
+func (sh StatsHandler) SizeGroups(c echo.Context) error {
+	items, err := sh.repo.SizeGroups(
+		c.Request().Context(),
+		nil,
+	)
+	if err != nil {
+		return handleError(c, err, sh.nsRepo)
+	}
+
+	response := make([]responses.SizeGroup, len(items))
+	for i := range items {
+		response[i] = responses.NewSizeGroup(items[i])
 	}
 	return returnArray(c, response)
 }

@@ -40,6 +40,7 @@ func (s *StorageTestSuite) TestBlobLogsByNamespace() {
 
 	s.Require().NotNil(log.Signer)
 	s.Require().EqualValues("celestia1mm8yykm46ec3t0dgwls70g0jvtm055wk9ayal8", log.Signer.Address)
+	s.Require().NotNil(log.Signer.Celestials)
 
 	s.Require().NotNil(log.Tx)
 	s.Require().EqualValues(4, log.Tx.Id)
@@ -293,15 +294,6 @@ func (s *StorageTestSuite) TestBlobLogsByHeight() {
 	s.Require().Equal("Rollup 1", log.Rollup.Name)
 }
 
-func (s *StorageTestSuite) TestCountBlobLogsByHeight() {
-	ctx, ctxCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer ctxCancel()
-
-	count, err := s.storage.BlobLogs.CountByHeight(ctx, 1000)
-	s.Require().NoError(err)
-	s.Require().EqualValues(count, 4)
-}
-
 func (s *StorageTestSuite) TestBlobLogsByProviders() {
 	ctx, ctxCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer ctxCancel()
@@ -396,6 +388,8 @@ func (s *StorageTestSuite) TestBlob() {
 
 	s.Require().NotNil(log.Signer)
 	s.Require().EqualValues("celestia1mm8yykm46ec3t0dgwls70g0jvtm055wk9ayal8", log.Signer.Address)
+	s.Require().NotNil(log.Signer.Celestials)
+	s.Require().EqualValues("name 1", log.Signer.Celestials.Id)
 
 	s.Require().NotNil(log.Tx)
 	s.Require().EqualValues(4, log.Tx.Id)

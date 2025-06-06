@@ -34,8 +34,10 @@ func (tx *Tx) getSigners(ctx context.Context, txId ...uint64) (signers []storage
 
 	err = tx.DB().NewSelect().TableExpr("(?) as signer", subQuery).
 		ColumnExpr("address.address as address__address").
+		ColumnExpr("celestial.id as address__celestials__id, celestial.image_url as address__celestials__image_url").
 		ColumnExpr("signer.*").
 		Join("left join address on address.id = signer.address_id").
+		Join("left join celestial on celestial.address_id = signer.address_id and celestial.status = 'PRIMARY'").
 		Scan(ctx, &signers)
 	return
 }
@@ -116,25 +118,26 @@ func (tx *Tx) ByIdWithRelations(ctx context.Context, id uint64) (transaction sto
 	return
 }
 
-func (tx *Tx) ByAddress(ctx context.Context, addressId uint64, fltrs storage.TxFilter) ([]storage.Tx, error) {
+func (tx *Tx) ByAddress(ctx context.Context, addressId uint64, fltrs storage.TxFilter) (txs []storage.Tx, err error) {
 	var relations []storage.Signer
-	query := tx.DB().NewSelect().
+	signersQuery := tx.DB().NewSelect().
 		Model(&relations).
-		Where("address_id = ?", addressId).
-		Relation("Tx").
-		Offset(fltrs.Offset)
+		Where("address_id = ?", addressId)
+
+	query := tx.DB().NewSelect().
+		Table("txs").
+		With("txs", signersQuery).
+		ColumnExpr("tx.*").
+		Join("left join tx on tx.id = txs.tx_id")
 
 	query = txFilter(query, fltrs)
+	query.Offset(fltrs.Offset)
 
-	if err := query.Scan(ctx); err != nil {
+	if err := query.Scan(ctx, &txs); err != nil {
 		return nil, err
 	}
 
-	transactions := make([]storage.Tx, len(relations))
-	for i := range relations {
-		transactions[i] = *relations[i].Tx
-	}
-	return transactions, nil
+	return txs, nil
 }
 
 func (tx *Tx) Genesis(ctx context.Context, limit, offset int, sortOrder sdk.SortOrder) (txs []storage.Tx, err error) {
@@ -158,11 +161,11 @@ func (tx *Tx) Gas(ctx context.Context, height types.Level, ts time.Time) (respon
 	return
 }
 
-func (tx *Tx) IdByHash(ctx context.Context, hash []byte) (id uint64, err error) {
+func (tx *Tx) IdAndTimeByHash(ctx context.Context, hash []byte) (id uint64, t time.Time, err error) {
 	err = tx.DB().NewSelect().
 		Model((*storage.Tx)(nil)).
-		Column("id").
+		Column("id", "time").
 		Where("hash = ?", hash).
-		Scan(ctx, &id)
+		Scan(ctx, &id, &t)
 	return
 }

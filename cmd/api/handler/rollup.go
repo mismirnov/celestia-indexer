@@ -9,6 +9,7 @@ import (
 
 	"github.com/celenium-io/celestia-indexer/cmd/api/handler/responses"
 	"github.com/celenium-io/celestia-indexer/internal/storage"
+	"github.com/celenium-io/celestia-indexer/internal/storage/types"
 	testsuite "github.com/celenium-io/celestia-indexer/internal/test_suite"
 	"github.com/labstack/echo/v4"
 )
@@ -31,21 +32,51 @@ func NewRollupHandler(
 	}
 }
 
+type rollupList struct {
+	Limit    int         `query:"limit"     validate:"omitempty,min=1,max=100"`
+	Offset   int         `query:"offset"    validate:"omitempty,min=0"`
+	Sort     string      `query:"sort"      validate:"omitempty,oneof=asc desc"`
+	SortBy   string      `query:"sort_by"   validate:"omitempty,oneof=time blobs_count size fee"`
+	Tags     StringArray `query:"tags"      validate:"omitempty"`
+	Stack    StringArray `query:"stack"     validate:"omitempty"`
+	Provider StringArray `query:"provider"  validate:"omitempty"`
+	Category StringArray `query:"category"  validate:"omitempty,dive,category"`
+	Type     StringArray `query:"type"      validate:"omitempty,dive,type"`
+	IsActive *bool       `query:"is_active" validate:"omitempty"`
+}
+
+func (p *rollupList) SetDefault() {
+	if p.Limit == 0 {
+		p.Limit = 10
+	}
+	if p.Sort == "" {
+		p.Sort = desc
+	}
+	if p.SortBy == "" {
+		p.SortBy = "size"
+	}
+}
+
 // Leaderboard godoc
 //
-//	@Summary		List rollups info
-//	@Description	List rollups info
-//	@Tags			rollup
-//	@ID				list-rollup
-//	@Param			limit	query	integer	false	"Count of requested entities"	mininum(1)	maximum(100)
-//	@Param			offset	query	integer	false	"Offset"						mininum(1)
-//	@Param			sort	query	string	false	"Sort order. Default: desc"		Enums(asc, desc)
-//	@Param			sort_by	query	string	false	"Sort field. Default: size"		Enums(time, blobs_count, size, fee)
-//	@Produce		json
-//	@Success		200	{array}		responses.RollupWithStats
-//	@Failure		400	{object}	Error
-//	@Failure		500	{object}	Error
-//	@Router			/rollup [get]
+//		@Summary		List rollups info
+//		@Description	List rollups info
+//		@Tags			rollup
+//		@ID				list-rollup
+//		@Param			limit	 query	integer	false	"Count of requested entities"	mininum(1)	maximum(100)
+//		@Param			offset	 query	integer	false	"Offset"						mininum(1)
+//		@Param			sort	 query	string	false	"Sort order. Default: desc"		Enums(asc, desc)
+//		@Param			sort_by	 query	string	false	"Sort field. Default: size"		Enums(time, blobs_count, size, fee)
+//	    @Param          category query  string  false   "Comma-separated rollup category list"
+//	    @Param          tags     query  string  false   "Comma-separated rollup tags list"
+//	    @Param          stack    query  string  false   "Comma-separated rollup stack list"
+//	    @Param          provider query  string  false   "Comma-separated rollup provider list"
+//		@Param			is_active query	boolean	false	"If true, shows rollups with activity over the last month"
+//		@Produce		json
+//		@Success		200	{array}		responses.RollupWithStats
+//		@Failure		400	{object}	Error
+//		@Failure		500	{object}	Error
+//		@Router			/rollup [get]
 func (handler RollupHandler) Leaderboard(c echo.Context) error {
 	req, err := bindAndValidate[rollupList](c)
 	if err != nil {
@@ -53,7 +84,28 @@ func (handler RollupHandler) Leaderboard(c echo.Context) error {
 	}
 	req.SetDefault()
 
-	rollups, err := handler.rollups.Leaderboard(c.Request().Context(), req.SortBy, pgSort(req.Sort), req.Limit, req.Offset)
+	rollupTypes := make([]types.RollupType, len(req.Type))
+	for i := range rollupTypes {
+		rollupTypes[i] = types.RollupType(req.Type[i])
+	}
+
+	categories := make([]types.RollupCategory, len(req.Category))
+	for i := range categories {
+		categories[i] = types.RollupCategory(req.Category[i])
+	}
+
+	rollups, err := handler.rollups.Leaderboard(c.Request().Context(), storage.LeaderboardFilters{
+		SortField: req.SortBy,
+		Sort:      pgSort(req.Sort),
+		Limit:     req.Limit,
+		Offset:    req.Offset,
+		Category:  categories,
+		Tags:      req.Tags,
+		Type:      rollupTypes,
+		Stack:     req.Stack,
+		Provider:  req.Provider,
+		IsActive:  req.IsActive,
+	})
 	if err != nil {
 		return handleError(c, err, handler.rollups)
 	}
@@ -64,16 +116,44 @@ func (handler RollupHandler) Leaderboard(c echo.Context) error {
 	return returnArray(c, response)
 }
 
+type rollupDayList struct {
+	Limit    int         `query:"limit"    validate:"omitempty,min=1,max=100"`
+	Offset   int         `query:"offset"   validate:"omitempty,min=0"`
+	Sort     string      `query:"sort"     validate:"omitempty,oneof=asc desc"`
+	SortBy   string      `query:"sort_by"  validate:"omitempty,oneof=avg_size blobs_count total_size total_fee throughput namespace_count pfb_count mb_price"`
+	Stack    StringArray `query:"stack"    validate:"omitempty"`
+	Provider StringArray `query:"provider" validate:"omitempty"`
+	Category StringArray `query:"category" validate:"omitempty,dive,category"`
+	Tags     StringArray `query:"tags"     validate:"omitempty"`
+	Type     StringArray `query:"type"     validate:"omitempty,dive,type"`
+}
+
+func (p *rollupDayList) SetDefault() {
+	if p.Limit == 0 {
+		p.Limit = 10
+	}
+	if p.Sort == "" {
+		p.Sort = desc
+	}
+	if p.SortBy == "" {
+		p.SortBy = "throughput"
+	}
+}
+
 // LeaderboardDay godoc
 //
 //	@Summary		List rollups info with stats by previous 24 hours
 //	@Description	List rollups info with stats by previous 24 hours
 //	@Tags			rollup
 //	@ID				list-rollup-24h
-//	@Param			limit	query	integer	false	"Count of requested entities"	mininum(1)	maximum(100)
-//	@Param			offset	query	integer	false	"Offset"						mininum(1)
-//	@Param			sort	query	string	false	"Sort order. Default: desc"		Enums(asc, desc)
-//	@Param			sort_by	query	string	false	"Sort field. Default: mb_price"	Enums(avg_size, blobs_count, total_size, total_fee, throughput, namespace_count, pfb_count, mb_price)
+//	@Param			limit	 query	integer	false	"Count of requested entities"	mininum(1)	maximum(100)
+//	@Param			offset	 query	integer	false	"Offset"						mininum(1)
+//	@Param			sort	 query	string	false	"Sort order. Default: desc"		Enums(asc, desc)
+//	@Param			sort_by	 query	string	false	"Sort field. Default: mb_price"	Enums(avg_size, blobs_count, total_size, total_fee, throughput, namespace_count, pfb_count, mb_price)
+//	@Param          category query  string  false   "Comma-separated rollup category list"
+//	@Param          tags     query  string  false   "Comma-separated rollup tags list"
+//	@Param          stack    query  string  false   "Comma-separated rollup stack list"
+//	@Param          provider query  string  false   "Comma-separated rollup provider list"
 //	@Produce		json
 //	@Success		200	{array}		responses.RollupWithDayStats
 //	@Failure		400	{object}	Error
@@ -86,7 +166,27 @@ func (handler RollupHandler) LeaderboardDay(c echo.Context) error {
 	}
 	req.SetDefault()
 
-	rollups, err := handler.rollups.LeaderboardDay(c.Request().Context(), req.SortBy, pgSort(req.Sort), req.Limit, req.Offset)
+	rollupTypes := make([]types.RollupType, len(req.Type))
+	for i := range rollupTypes {
+		rollupTypes[i] = types.RollupType(req.Type[i])
+	}
+
+	categories := make([]types.RollupCategory, len(req.Category))
+	for i := range categories {
+		categories[i] = types.RollupCategory(req.Category[i])
+	}
+
+	rollups, err := handler.rollups.LeaderboardDay(c.Request().Context(), storage.LeaderboardFilters{
+		SortField: req.SortBy,
+		Sort:      pgSort(req.Sort),
+		Limit:     req.Limit,
+		Offset:    req.Offset,
+		Tags:      req.Tags,
+		Category:  categories,
+		Type:      rollupTypes,
+		Stack:     req.Stack,
+		Provider:  req.Provider,
+	})
 	if err != nil {
 		return handleError(c, err, handler.rollups)
 	}
@@ -230,12 +330,19 @@ func (handler RollupHandler) GetBlobs(c echo.Context) error {
 		return c.JSON(http.StatusOK, []any{})
 	}
 
+	rollup, err := handler.rollups.ById(c.Request().Context(), req.Id)
+	if err != nil {
+		return handleError(c, err, handler.rollups)
+	}
+
 	blobs, err := handler.blobs.ByProviders(c.Request().Context(), providers, storage.BlobLogFilters{
 		Limit:  req.Limit,
 		Offset: req.Offset,
 		Sort:   pgSort(req.Sort),
 		SortBy: req.SortBy,
 		Joins:  *req.Joins,
+		To:     rollup.LastActionTime.Add(time.Hour),
+		From:   rollup.FirstActionTime,
 	})
 	if err != nil {
 		return handleError(c, err, handler.rollups)
@@ -280,10 +387,11 @@ func (handler RollupHandler) Stats(c echo.Context) error {
 	histogram, err := handler.rollups.Series(
 		c.Request().Context(),
 		req.Id,
-		req.Timeframe,
+		storage.Timeframe(req.Timeframe),
 		req.SeriesName,
 		storage.NewSeriesRequest(req.From, req.To),
 	)
+
 	if err != nil {
 		return handleError(c, err, handler.rollups)
 	}
@@ -295,30 +403,57 @@ func (handler RollupHandler) Stats(c echo.Context) error {
 	return returnArray(c, response)
 }
 
+type rollupAllSeriesRequest struct {
+	Timeframe storage.Timeframe `example:"hour" param:"timeframe" swaggertype:"string" validate:"required,oneof=hour day month"`
+}
+
 // AllSeries godoc
 //
 //	@Summary		Get series for all rollups
 //	@Description	Get series for all rollups
 //	@Tags			rollup
 //	@ID				get-rollup-all-series
+//	@Param			timeframe	path	string	true	"Timeframe"		Enums(hour, day, month)
 //	@Produce		json
-//	@Success		200	{array}		responses.RollupAllSeriesItem
+//	@Success		200	{array}		responses.RollupAllSeriesResponse
 //	@Failure		400	{object}	Error
 //	@Failure		500	{object}	Error
-//	@Router			/rollup/stats/series [get]
+//	@Router			/rollup/stats/series/{timeframe} [get]
 func (handler RollupHandler) AllSeries(c echo.Context) error {
+	req, err := bindAndValidate[rollupAllSeriesRequest](c)
+	if err != nil {
+		return badRequestError(c, err)
+	}
+
 	histogram, err := handler.rollups.AllSeries(
 		c.Request().Context(),
+		req.Timeframe,
 	)
 	if err != nil {
 		return handleError(c, err, handler.rollups)
 	}
 
-	response := make([]responses.RollupAllSeriesItem, len(histogram))
+	response := make([]responses.RollupAllSeriesResponse, 0)
 	for i := range histogram {
-		response[i] = responses.NewRollupAllSeriesItem(histogram[i])
+		key := histogram[i].Time
+		value := responses.NewRollupAllSeriesItem(histogram[i])
+
+		var found bool
+		for j := range response {
+			if response[j].Time.Equal(key) {
+				response[j].Items = append(response[j].Items, value)
+				found = true
+			}
+		}
+
+		if !found {
+			response = append(response, responses.RollupAllSeriesResponse{
+				Time:  key,
+				Items: []responses.RollupAllSeriesItem{value},
+			})
+		}
 	}
-	return returnArray(c, response)
+	return c.JSON(http.StatusOK, response)
 }
 
 // Count godoc
@@ -400,7 +535,7 @@ func (handler RollupHandler) Distribution(c echo.Context) error {
 		c.Request().Context(),
 		req.Id,
 		req.SeriesName,
-		req.Timeframe,
+		storage.Timeframe(req.Timeframe),
 	)
 	if err != nil {
 		return handleError(c, err, handler.rollups)
@@ -471,4 +606,44 @@ func (handler RollupHandler) ExportBlobs(c echo.Context) error {
 		return handleError(c, err, handler.rollups)
 	}
 	return nil
+}
+
+type rollupGroupStats struct {
+	Func   string `query:"func"   validate:"oneof=sum avg"`
+	Column string `query:"column" validate:"oneof=stack type category vm provider"`
+}
+
+// RollupGroupedStats godoc
+//
+//	@Summary		Rollup Grouped Statistics
+//	@Description	Rollup Grouped Statistics
+//	@Tags			rollup
+//	@ID				rollup-grouped-statistics
+//	@Param			func	query	string	false	"Aggregate function"	Enums(sum, avg)
+//	@Param			column	query	string	false	"Group column"	Enums(stack, type, category, vm, provider)
+//	@Produce		json
+//	@Success		200	{array}		responses.RollupGroupedStats
+//	@Failure		400	{object}	Error
+//	@Failure		500	{object}	Error
+//	@Router			/rollup/group [get]
+func (handler RollupHandler) RollupGroupedStats(c echo.Context) error {
+	req, err := bindAndValidate[rollupGroupStats](c)
+	if err != nil {
+		return badRequestError(c, err)
+	}
+
+	rollups, err := handler.rollups.RollupStatsGrouping(c.Request().Context(), storage.RollupGroupStatsFilters{
+		Func:   req.Func,
+		Column: req.Column,
+	})
+	if err != nil {
+		return handleError(c, err, handler.rollups)
+	}
+
+	response := make([]responses.RollupGroupedStats, len(rollups))
+	for i := range rollups {
+		response[i] = responses.NewRollupGroupedStats(rollups[i])
+	}
+
+	return returnArray(c, response)
 }

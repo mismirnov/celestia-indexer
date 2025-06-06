@@ -17,6 +17,9 @@ import (
 	"github.com/celenium-io/celestia-indexer/internal/storage"
 	"github.com/celenium-io/celestia-indexer/internal/storage/mock"
 	"github.com/celenium-io/celestia-indexer/internal/storage/types"
+	testsuite "github.com/celenium-io/celestia-indexer/internal/test_suite"
+	celestials "github.com/celenium-io/celestial-module/pkg/storage"
+	celestialMock "github.com/celenium-io/celestial-module/pkg/storage/mock"
 	"github.com/labstack/echo/v4"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -50,6 +53,8 @@ type AddressTestSuite struct {
 	redelegations *mock.MockIRedelegation
 	vestings      *mock.MockIVestingAccount
 	grants        *mock.MockIGrant
+	celestials    *celestialMock.MockICelestial
+	votes         *mock.MockIVote
 	state         *mock.MockIState
 	echo          *echo.Echo
 	handler       *AddressHandler
@@ -70,8 +75,10 @@ func (s *AddressTestSuite) SetupSuite() {
 	s.redelegations = mock.NewMockIRedelegation(s.ctrl)
 	s.vestings = mock.NewMockIVestingAccount(s.ctrl)
 	s.grants = mock.NewMockIGrant(s.ctrl)
+	s.celestials = celestialMock.NewMockICelestial(s.ctrl)
+	s.votes = mock.NewMockIVote(s.ctrl)
 	s.state = mock.NewMockIState(s.ctrl)
-	s.handler = NewAddressHandler(s.address, s.txs, s.blobLogs, s.messages, s.delegations, s.undelegations, s.redelegations, s.vestings, s.grants, s.state, testIndexerName)
+	s.handler = NewAddressHandler(s.address, s.txs, s.blobLogs, s.messages, s.delegations, s.undelegations, s.redelegations, s.vestings, s.grants, s.celestials, s.votes, s.state, testIndexerName)
 }
 
 // TearDownSuite -
@@ -100,7 +107,12 @@ func (s *AddressTestSuite) TestGet() {
 			Address:    testAddress,
 			Height:     100,
 			LastHeight: 100,
-		}, nil)
+			Celestials: &celestials.Celestial{
+				Id:       "name",
+				ImageUrl: "image",
+			},
+		}, nil).
+		Times(1)
 
 	s.Require().NoError(s.handler.Get(c))
 	s.Require().Equal(http.StatusOK, rec.Code)
@@ -112,6 +124,9 @@ func (s *AddressTestSuite) TestGet() {
 	s.Require().EqualValues(100, address.Height)
 	s.Require().EqualValues(100, address.LastHeight)
 	s.Require().Equal(testAddress, address.Hash)
+	s.Require().NotNil(address.Celestials)
+	s.Require().EqualValues("name", address.Celestials.Name)
+	s.Require().EqualValues("image", address.Celestials.ImageUrl)
 }
 
 func (s *AddressTestSuite) TestGetInvalidAddress() {
@@ -173,6 +188,10 @@ func (s *AddressTestSuite) TestList() {
 					Delegated: decimal.RequireFromString("1"),
 					Unbonding: decimal.RequireFromString("2"),
 				},
+				Celestials: &celestials.Celestial{
+					Id:       "name",
+					ImageUrl: "image",
+				},
 			},
 		}, nil)
 
@@ -191,6 +210,9 @@ func (s *AddressTestSuite) TestList() {
 	s.Require().Equal("utia", address[0].Balance.Currency)
 	s.Require().Equal("1", address[0].Balance.Delegated)
 	s.Require().Equal("2", address[0].Balance.Unbonding)
+	s.Require().NotNil(address[0].Celestials)
+	s.Require().EqualValues("name", address[0].Celestials.Name)
+	s.Require().EqualValues("image", address[0].Celestials.ImageUrl)
 }
 
 func (s *AddressTestSuite) TestTransactions() {
@@ -356,7 +378,7 @@ func (s *AddressTestSuite) TestBlobs() {
 	l := logs[0]
 	s.Require().EqualValues(10000, l.Height)
 	s.Require().Equal(testTime, l.Time)
-	s.Require().Equal(testAddress, l.Signer)
+	s.Require().Equal(testAddress, l.Signer.Hash)
 	s.Require().Equal("test_commitment", l.Commitment)
 	s.Require().EqualValues(1000, l.Size)
 	s.Require().Nil(l.Namespace)
@@ -424,7 +446,7 @@ func (s *AddressTestSuite) TestDelegations() {
 
 	d := delegations[0]
 	s.Require().Equal("100", d.Amount)
-	s.Require().Equal(testAddress, d.Delegator)
+	s.Require().Equal(testAddress, d.Delegator.Hash)
 	s.Require().NotNil(d.Validator)
 	s.Require().Equal(testValidator.ConsAddress, d.Validator.ConsAddress)
 }
@@ -477,7 +499,7 @@ func (s *AddressTestSuite) TestUndelegations() {
 	s.Require().EqualValues(1000, d.Height)
 	s.Require().Equal(testTime, d.Time)
 	s.Require().Equal(testTime.Add(time.Hour), d.CompletionTime)
-	s.Require().Equal(testAddress, d.Delegator)
+	s.Require().Equal(testAddress, d.Delegator.Hash)
 	s.Require().NotNil(d.Validator)
 	s.Require().Equal(testValidator.ConsAddress, d.Validator.ConsAddress)
 }
@@ -532,7 +554,7 @@ func (s *AddressTestSuite) TestRedelegations() {
 	s.Require().EqualValues(1000, d.Height)
 	s.Require().Equal(testTime, d.Time)
 	s.Require().Equal(testTime.Add(time.Hour), d.CompletionTime)
-	s.Require().Equal(testAddress, d.Delegator)
+	s.Require().Equal(testAddress, d.Delegator.Hash)
 	s.Require().NotNil(d.Source)
 	s.Require().Equal(testValidator.ConsAddress, d.Source.ConsAddress)
 	s.Require().NotNil(d.Destination)
@@ -637,7 +659,7 @@ func (s *AddressTestSuite) TestGrants() {
 	g := grants[0]
 	s.Require().Equal(testTime, g.Time)
 	s.Require().EqualValues(1000, g.Height)
-	s.Require().Equal(testAddress, g.Grantee)
+	s.Require().Equal(testAddress, g.Grantee.Hash)
 	s.Require().Equal("test_msg", g.Authorization)
 	s.Require().NotNil(g.Params)
 	s.Require().False(g.Revoked)
@@ -689,7 +711,7 @@ func (s *AddressTestSuite) TestGrantee() {
 	g := grants[0]
 	s.Require().Equal(testTime, g.Time)
 	s.Require().EqualValues(1000, g.Height)
-	s.Require().Equal(testAddress, g.Granter)
+	s.Require().Equal(testAddress, g.Granter.Hash)
 	s.Require().Equal("test_msg", g.Authorization)
 	s.Require().NotNil(g.Params)
 	s.Require().False(g.Revoked)
@@ -733,4 +755,115 @@ func (s *AddressTestSuite) TestStats() {
 			s.Require().Equal("1000", g.Value)
 		}
 	}
+}
+
+func (s *AddressTestSuite) TestCelestials() {
+	q := make(url.Values)
+	q.Set("limit", "10")
+	q.Set("offset", "0")
+
+	req := httptest.NewRequest(http.MethodGet, "/?"+q.Encode(), nil)
+	rec := httptest.NewRecorder()
+	c := s.echo.NewContext(req, rec)
+	c.SetPath("/address/:hash/celestials")
+	c.SetParamNames("hash")
+	c.SetParamValues(testAddress)
+
+	s.address.EXPECT().
+		IdByHash(gomock.Any(), testHashAddress).
+		Return([]uint64{1}, nil).
+		Times(1)
+
+	storageResponse := make([]celestials.Celestial, 0)
+	for i := 0; i < 10; i++ {
+		storageResponse = append(storageResponse, celestials.Celestial{
+			Id:       testsuite.RandomText(i + 10),
+			ImageUrl: testsuite.RandomText(2*i + 1),
+			Status:   celestials.StatusVERIFIED,
+		})
+	}
+
+	s.celestials.EXPECT().
+		ByAddressId(gomock.Any(), uint64(1), 10, 0).
+		Return(storageResponse, nil)
+
+	s.Require().NoError(s.handler.Celestials(c))
+	s.Require().Equal(http.StatusOK, rec.Code)
+
+	var celestials []responses.Celestial
+	err := json.NewDecoder(rec.Body).Decode(&celestials)
+	s.Require().NoError(err)
+	s.Require().Len(celestials, len(storageResponse))
+
+	for i := range celestials {
+		s.Require().EqualValues(storageResponse[i].Id, celestials[i].Name)
+		s.Require().EqualValues(storageResponse[i].ImageUrl, celestials[i].ImageUrl)
+		s.Require().EqualValues("VERIFIED", celestials[i].Status)
+	}
+}
+
+func (s *AddressTestSuite) TestVotes() {
+	q := make(url.Values)
+	q.Set("limit", "10")
+	q.Set("offset", "0")
+
+	req := httptest.NewRequest(http.MethodGet, "/?"+q.Encode(), nil)
+	rec := httptest.NewRecorder()
+	c := s.echo.NewContext(req, rec)
+	c.SetPath("/address/:hash/votes")
+	c.SetParamNames("hash")
+	c.SetParamValues(testAddress)
+
+	s.address.EXPECT().
+		IdByAddress(gomock.Any(), testAddress).
+		Return(123, nil)
+
+	s.votes.EXPECT().
+		ByVoterId(gomock.Any(), uint64(123), storage.VoteFilters{
+			Limit:  10,
+			Offset: 0,
+		}).
+		Return([]storage.Vote{
+			{
+				Id:      1,
+				Height:  1000,
+				Weight:  decimal.NewFromFloat(1),
+				Option:  types.VoteOptionYes,
+				VoterId: 1,
+				Voter: &storage.Address{
+					Id:         111,
+					Hash:       testHashAddress,
+					Address:    testAddress,
+					Height:     333,
+					LastHeight: 333,
+					Balance: storage.Balance{
+						Currency:  "utia",
+						Spendable: decimal.RequireFromString("100"),
+						Delegated: decimal.RequireFromString("1"),
+						Unbonding: decimal.RequireFromString("2"),
+					},
+					Celestials: &celestials.Celestial{
+						Id:       "name",
+						ImageUrl: "image",
+					},
+				},
+			},
+		}, nil)
+
+	s.Require().NoError(s.handler.Votes(c))
+	s.Require().Equal(http.StatusOK, rec.Code)
+
+	var votes []responses.Vote
+	err := json.NewDecoder(rec.Body).Decode(&votes)
+	s.Require().NoError(err)
+	s.Require().Len(votes, 1)
+	s.Require().EqualValues(1, votes[0].Id)
+	s.Require().EqualValues(1000, votes[0].Height)
+	s.Require().EqualValues(decimal.NewFromFloat(1), votes[0].Weight)
+	s.Require().EqualValues(types.VoteOptionYes, votes[0].Option)
+	s.Require().EqualValues(1, votes[0].VoterId)
+	s.Require().Nil(votes[0].Validator)
+	s.Require().NotNil(votes[0].Voter)
+	s.Require().NotNil(votes[0].Voter.Celestials)
+	s.Require().EqualValues("image", votes[0].Voter.Celestials.ImageUrl)
 }

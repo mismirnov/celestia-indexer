@@ -83,6 +83,50 @@ func (c *MockApiBlockCall) DoAndReturn(f func(context.Context, types0.Level) (ty
 	return c
 }
 
+// BlockBulkData mocks base method.
+func (m *MockApi) BlockBulkData(ctx context.Context, levels ...types0.Level) ([]types0.BlockData, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx}
+	for _, a := range levels {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BlockBulkData", varargs...)
+	ret0, _ := ret[0].([]types0.BlockData)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockBulkData indicates an expected call of BlockBulkData.
+func (mr *MockApiMockRecorder) BlockBulkData(ctx any, levels ...any) *MockApiBlockBulkDataCall {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx}, levels...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockBulkData", reflect.TypeOf((*MockApi)(nil).BlockBulkData), varargs...)
+	return &MockApiBlockBulkDataCall{Call: call}
+}
+
+// MockApiBlockBulkDataCall wrap *gomock.Call
+type MockApiBlockBulkDataCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockApiBlockBulkDataCall) Return(arg0 []types0.BlockData, arg1 error) *MockApiBlockBulkDataCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockApiBlockBulkDataCall) Do(f func(context.Context, ...types0.Level) ([]types0.BlockData, error)) *MockApiBlockBulkDataCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockApiBlockBulkDataCall) DoAndReturn(f func(context.Context, ...types0.Level) ([]types0.BlockData, error)) *MockApiBlockBulkDataCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // BlockData mocks base method.
 func (m *MockApi) BlockData(ctx context.Context, level types0.Level) (types0.BlockData, error) {
 	m.ctrl.T.Helper()
@@ -419,6 +463,68 @@ func (c *MockDalApiBlobsCall) Do(f func(context.Context, types0.Level, ...string
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockDalApiBlobsCall) DoAndReturn(f func(context.Context, types0.Level, ...string) ([]types.Blob, error)) *MockDalApiBlobsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockCosmosApi is a mock of CosmosApi interface.
+type MockCosmosApi struct {
+	ctrl     *gomock.Controller
+	recorder *MockCosmosApiMockRecorder
+}
+
+// MockCosmosApiMockRecorder is the mock recorder for MockCosmosApi.
+type MockCosmosApiMockRecorder struct {
+	mock *MockCosmosApi
+}
+
+// NewMockCosmosApi creates a new mock instance.
+func NewMockCosmosApi(ctrl *gomock.Controller) *MockCosmosApi {
+	mock := &MockCosmosApi{ctrl: ctrl}
+	mock.recorder = &MockCosmosApiMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCosmosApi) EXPECT() *MockCosmosApiMockRecorder {
+	return m.recorder
+}
+
+// ModuleAccounts mocks base method.
+func (m *MockCosmosApi) ModuleAccounts(ctx context.Context) ([]types.Account, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ModuleAccounts", ctx)
+	ret0, _ := ret[0].([]types.Account)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ModuleAccounts indicates an expected call of ModuleAccounts.
+func (mr *MockCosmosApiMockRecorder) ModuleAccounts(ctx any) *MockCosmosApiModuleAccountsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModuleAccounts", reflect.TypeOf((*MockCosmosApi)(nil).ModuleAccounts), ctx)
+	return &MockCosmosApiModuleAccountsCall{Call: call}
+}
+
+// MockCosmosApiModuleAccountsCall wrap *gomock.Call
+type MockCosmosApiModuleAccountsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockCosmosApiModuleAccountsCall) Return(arg0 []types.Account, arg1 error) *MockCosmosApiModuleAccountsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockCosmosApiModuleAccountsCall) Do(f func(context.Context) ([]types.Account, error)) *MockCosmosApiModuleAccountsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockCosmosApiModuleAccountsCall) DoAndReturn(f func(context.Context) ([]types.Account, error)) *MockCosmosApiModuleAccountsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

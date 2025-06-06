@@ -19,7 +19,9 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS leaderboard AS
             from rollup_stats_by_month
             group by 1, 2
         ) as agg
-        inner join rollup_provider as rp on rp.address_id = agg.signer_id AND (rp.namespace_id = agg.namespace_id OR rp.namespace_id = 0)
+        inner join rollup_provider as rp on (rp.address_id = agg.signer_id OR rp.address_id = 0) AND (rp.namespace_id = agg.namespace_id OR rp.namespace_id = 0)
+        inner join rollup on rollup.id = rp.rollup_id
+        where rollup.verified = TRUE
         group by 1
     ) 
     select 
@@ -31,6 +33,7 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS leaderboard AS
         board.size / (select sum(size) from board) as size_pct,
         board.fee / (select sum(fee) from board)as fee_pct,
         board.blobs_count / (select sum(blobs_count) from board)as blobs_count_pct,
+        (now() - board.last_time < INTERVAL '1 month') as is_active,
         rollup.*
     from board
     inner join rollup on rollup.id = board.rollup_id;

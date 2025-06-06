@@ -83,16 +83,6 @@ type Price struct {
 	Close string    `example:"0.17632"                   format:"string"    json:"close" swaggertype:"string"`
 }
 
-func NewPrice(price storage.Price) Price {
-	return Price{
-		Time:  price.Time,
-		Open:  price.Open.String(),
-		High:  price.High.String(),
-		Low:   price.Low.String(),
-		Close: price.Close.String(),
-	}
-}
-
 type DistributionItem struct {
 	Name  string `example:"12"      format:"string" json:"name"  swaggertype:"string"`
 	Value string `example:"0.17632" format:"string" json:"value" swaggertype:"string"`
@@ -103,7 +93,7 @@ func NewDistributionItem(item storage.DistributionItem, tf string) (result Distr
 
 	switch tf {
 	case "day":
-		result.Name = time.Weekday(item.Name).String()
+		result.Name = time.Weekday(item.Name % 7).String()
 	case "hour":
 		result.Name = strconv.FormatInt(int64(item.Name), 10)
 	default:
@@ -165,21 +155,40 @@ func NewCountItem(item storage.CountItem) CountItem {
 }
 
 type RollupAllSeriesItem struct {
-	Time       time.Time `example:"2023-07-04T03:10:57+00:00"       format:"date-time" json:"time"           swaggertype:"string"`
-	Name       string    `example:"Rollup name"                     format:"string"    json:"name,omitempty" swaggertype:"string"`
-	Logo       string    `example:"https://some_link.com/image.png" format:"string"    json:"logo,omitempty" swaggertype:"string"`
-	Size       int64     `example:"123"                             format:"integer"   json:"size"           swaggertype:"integer"`
-	Fee        string    `example:"123"                             format:"string"    json:"fee"            swaggertype:"string"`
-	BlobsCount int64     `example:"123"                             format:"integer"   json:"blobs_count"    swaggertype:"integer"`
+	Name       string `example:"Rollup name"                     format:"string"  json:"name,omitempty" swaggertype:"string"`
+	Logo       string `example:"https://some_link.com/image.png" format:"string"  json:"logo,omitempty" swaggertype:"string"`
+	Size       int64  `example:"123"                             format:"integer" json:"size"           swaggertype:"integer"`
+	Fee        string `example:"123"                             format:"string"  json:"fee"            swaggertype:"string"`
+	BlobsCount int64  `example:"123"                             format:"integer" json:"blobs_count"    swaggertype:"integer"`
 }
 
 func NewRollupAllSeriesItem(stats storage.RollupHistogramItem) RollupAllSeriesItem {
 	return RollupAllSeriesItem{
-		Time:       stats.Time,
 		Name:       stats.Name,
 		Logo:       stats.Logo,
 		Size:       stats.Size,
 		Fee:        stats.Fee,
 		BlobsCount: stats.BlobsCount,
+	}
+}
+
+type RollupAllSeriesResponse struct {
+	Time  time.Time             `example:"2023-07-04T03:10:57+00:00" format:"date-time" json:"time" swaggertype:"string"`
+	Items []RollupAllSeriesItem `json:"items"`
+}
+
+type SizeGroup struct {
+	Name    string `example:"Rollup name" format:"string"  json:"name"     swaggertype:"string"`
+	Count   int64  `example:"123"         format:"integer" json:"count"    swaggertype:"integer"`
+	Size    int64  `example:"123"         format:"integer" json:"size"     swaggertype:"integer"`
+	AvgSize int64  `example:"123"         format:"integer" json:"avg_size" swaggertype:"integer"`
+}
+
+func NewSizeGroup(sg storage.SizeGroup) SizeGroup {
+	return SizeGroup{
+		Name:    sg.Name,
+		Count:   sg.Count,
+		Size:    sg.Size,
+		AvgSize: sg.AvgSize,
 	}
 }

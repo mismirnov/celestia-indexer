@@ -30,23 +30,11 @@ services:
       - "127.0.0.1:9876:9876"
     logging: *celestia-logging
 
-  quotes:
-    restart: always
-    image: ghcr.io/celenium-io/celestia-indexer-quotes:${TAG:-master}
-    build:
-      context: .
-      dockerfile: build/quotes/Dockerfile
-    env_file:
-      - .env
-    depends_on:
-      - db
-    logging: *celestia-logging
-
   db:
     command:
       - -cshared_preload_libraries=timescaledb,pg_stat_statements
       - -cpg_stat_statements.track=all
-    image: timescale/timescaledb-ha:pg15-latest
+    image: timescale/timescaledb-ha:pg15.8-ts2.17.0-all
     restart: always
     volumes:
       - db:/home/postgres/pgdata/data
@@ -63,5 +51,18 @@ services:
       timeout: 5s
       retries: 5
     logging: *celestia-logging
+
+  cache:
+    image: valkey/valkey:8.0.2-alpine
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - VALKEY_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - cache:/bitnami/valkey/data
+    logging: *celestia-logging
+
 volumes:
   db:
+  cache:

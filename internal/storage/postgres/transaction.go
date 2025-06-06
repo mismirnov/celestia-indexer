@@ -14,6 +14,7 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 
 	models "github.com/celenium-io/celestia-indexer/internal/storage"
+	storageTypes "github.com/celenium-io/celestia-indexer/internal/storage/types"
 	"github.com/dipdup-net/indexer-sdk/pkg/storage"
 )
 
@@ -31,7 +32,29 @@ func (tx Transaction) SaveConstants(ctx context.Context, constants ...models.Con
 		return nil
 	}
 
-	_, err := tx.Tx().NewInsert().Model(&constants).Exec(ctx)
+	_, err := tx.Tx().NewInsert().Model(&constants).
+		Column("module", "name", "value").
+		On("CONFLICT (module, name) DO UPDATE").
+		Set("value = EXCLUDED.value").
+		Exec(ctx)
+	return err
+}
+
+func (tx Transaction) UpdateConstants(ctx context.Context, constants ...models.Constant) error {
+	if len(constants) == 0 {
+		return nil
+	}
+
+	values := tx.Tx().NewValues(&constants)
+
+	_, err := tx.Tx().NewUpdate().
+		With("_data", values).
+		Model((*models.Constant)(nil)).
+		TableExpr("_data").
+		Set("value = _data.value").
+		Where("constant.module = _data.module").
+		Where("constant.name = _data.name").
+		Exec(ctx)
 	return err
 }
 
@@ -109,7 +132,7 @@ func (tx Transaction) SaveAddresses(ctx context.Context, addresses ...*models.Ad
 	}
 
 	_, err := tx.Tx().NewInsert().Model(&addr).
-		Column("address", "height", "last_height", "hash").
+		Column("address", "height", "last_height", "hash", "name").
 		On("CONFLICT ON CONSTRAINT address_idx DO UPDATE").
 		Set("last_height = EXCLUDED.last_height").
 		Returning("xmax, id").
@@ -277,49 +300,34 @@ func (tx Transaction) SaveValidators(ctx context.Context, validators ...*models.
 		return 0, nil
 	}
 
-	var count int
+	arr := make([]addedValidator, len(validators))
 	for i := range validators {
-		model := addedValidator{
-			Validator: validators[i],
-		}
-		query := tx.Tx().NewInsert().Model(&model).
-			Column("id", "delegator", "address", "cons_address", "moniker", "website", "identity", "contacts", "details", "rate", "max_rate", "max_change_rate", "min_self_delegation", "stake", "jailed", "commissions", "rewards", "height").
-			On("CONFLICT ON CONSTRAINT address_validator DO UPDATE").
-			Set("rate = EXCLUDED.rate").
-			Set("min_self_delegation = EXCLUDED.min_self_delegation")
+		arr[i].Validator = validators[i]
+	}
 
-		if !validators[i].Stake.IsZero() {
-			query.Set("stake = added_validator.stake + EXCLUDED.stake")
-		}
-		if validators[i].Jailed != nil {
-			query.Set("jailed = EXCLUDED.jailed")
-		}
-		if !validators[i].Commissions.IsZero() {
-			query.Set("commissions = added_validator.commissions + EXCLUDED.commissions")
-		}
-		if !validators[i].Rewards.IsZero() {
-			query.Set("rewards = added_validator.rewards + EXCLUDED.rewards")
-		}
-		if validators[i].Moniker != models.DoNotModify {
-			query.Set("moniker = EXCLUDED.moniker")
-		}
-		if validators[i].Website != models.DoNotModify {
-			query.Set("website = EXCLUDED.website")
-		}
-		if validators[i].Identity != models.DoNotModify {
-			query.Set("identity = EXCLUDED.identity")
-		}
-		if validators[i].Contacts != models.DoNotModify {
-			query.Set("contacts = EXCLUDED.contacts")
-		}
-		if validators[i].Details != models.DoNotModify {
-			query.Set("details = EXCLUDED.details")
-		}
-		if _, err := query.Returning("xmax, id").Exec(ctx); err != nil {
-			return 0, err
-		}
+	query := tx.Tx().NewInsert().Model(&arr).
+		Column("id", "delegator", "address", "cons_address", "moniker", "website", "identity", "contacts", "details", "rate", "max_rate", "max_change_rate", "min_self_delegation", "stake", "jailed", "commissions", "rewards", "height").
+		On("CONFLICT ON CONSTRAINT address_validator DO UPDATE").
+		Set("rate = CASE WHEN EXCLUDED.rate > 0 THEN EXCLUDED.rate ELSE added_validator.rate END").
+		Set("min_self_delegation = CASE WHEN EXCLUDED.min_self_delegation > 0 THEN EXCLUDED.min_self_delegation ELSE added_validator.min_self_delegation END").
+		Set("stake = added_validator.stake + EXCLUDED.stake").
+		Set("commissions = added_validator.commissions + EXCLUDED.commissions").
+		Set("rewards = added_validator.rewards + EXCLUDED.rewards").
+		Set("moniker = CASE WHEN EXCLUDED.moniker != '[do-not-modify]' THEN EXCLUDED.moniker ELSE added_validator.moniker END").
+		Set("website = CASE WHEN EXCLUDED.website != '[do-not-modify]' THEN EXCLUDED.website ELSE added_validator.website END").
+		Set("identity = CASE WHEN EXCLUDED.identity != '[do-not-modify]' THEN EXCLUDED.identity ELSE added_validator.identity END").
+		Set("contacts = CASE WHEN EXCLUDED.contacts != '[do-not-modify]' THEN EXCLUDED.contacts ELSE added_validator.contacts END").
+		Set("details = CASE WHEN EXCLUDED.details != '[do-not-modify]' THEN EXCLUDED.details ELSE added_validator.details END").
+		Set("jailed = CASE WHEN EXCLUDED.jailed IS NOT NULL THEN EXCLUDED.jailed ELSE added_validator.jailed END").
+		Returning("xmax, id")
 
-		if model.Xmax == 0 {
+	if _, err := query.Exec(ctx); err != nil {
+		return 0, err
+	}
+
+	var count int
+	for i := range arr {
+		if arr[i].Xmax == 0 {
 			count++
 		}
 	}
@@ -385,6 +393,289 @@ func (tx Transaction) Jail(ctx context.Context, validators ...*models.Validator)
 		Set("stake = _data.stake + validator.stake").
 		Where("validator.id = _data.id").
 		Exec(ctx)
+	return err
+}
+
+type addedProposal struct {
+	bun.BaseModel `bun:"proposal"`
+	*models.Proposal
+
+	Xmax uint64 `bun:"xmax"`
+}
+
+func (tx Transaction) SaveProposals(ctx context.Context, proposals ...*models.Proposal) (int64, error) {
+	if len(proposals) == 0 {
+		return 0, nil
+	}
+
+	var count int64
+	for i := range proposals {
+		if proposals[i].Type == "" {
+			proposals[i].Type = storageTypes.ProposalTypeText
+		}
+		if proposals[i].Status == "" {
+			proposals[i].Status = storageTypes.ProposalStatusInactive
+		}
+
+		add := addedProposal{
+			Proposal: proposals[i],
+		}
+
+		query := tx.Tx().NewInsert().
+			Column("id", "proposer_id", "height", "created_at", "deposit_time", "activation_time", "status", "type", "title", "description", "deposit", "metadata", "changes", "yes", "no", "no_with_veto", "abstain", "yes_vals", "no_vals", "no_with_veto_vals", "abstain_vals", "yes_addrs", "no_addrs", "no_with_veto_addrs", "abstain_addrs", "votes_count", "voting_power", "yes_voting_power", "no_voting_power", "no_with_veto_voting_power", "abstain_voting_power").
+			Model(&add).
+			On("CONFLICT (id) DO UPDATE")
+
+		if proposals[i].Deposit.IsPositive() {
+			query.Set("deposit = added_proposal.deposit + EXCLUDED.deposit")
+		}
+
+		if !proposals[i].EmptyStatus() {
+			query.Set("status = EXCLUDED.status")
+		}
+
+		if proposals[i].ActivationTime != nil {
+			query.Set("activation_time = EXCLUDED.activation_time")
+		}
+
+		if proposals[i].VotesCount > 0 {
+			query.Set("votes_count = added_proposal.votes_count + EXCLUDED.votes_count")
+		}
+
+		if proposals[i].VotingPower.IsPositive() {
+			query.Set("voting_power = EXCLUDED.voting_power")
+		}
+
+		if proposals[i].Yes > 0 {
+			query.Set("yes = added_proposal.yes + EXCLUDED.yes")
+		}
+		if proposals[i].No > 0 {
+			query.Set("no = added_proposal.no + EXCLUDED.no")
+		}
+		if proposals[i].NoWithVeto > 0 {
+			query.Set("no_with_veto = added_proposal.no_with_veto + EXCLUDED.no_with_veto")
+		}
+		if proposals[i].Abstain > 0 {
+			query.Set("abstain = added_proposal.abstain + EXCLUDED.abstain")
+		}
+
+		if proposals[i].YesValidators > 0 {
+			query.Set("yes_vals = added_proposal.yes_vals + EXCLUDED.yes_vals")
+		}
+		if proposals[i].NoValidators > 0 {
+			query.Set("no_vals = added_proposal.no_vals + EXCLUDED.no_vals")
+		}
+		if proposals[i].NoWithVetoValidators > 0 {
+			query.Set("no_with_veto_vals = added_proposal.no_with_veto_vals + EXCLUDED.no_with_veto_vals")
+		}
+		if proposals[i].AbstainValidators > 0 {
+			query.Set("abstain_vals = added_proposal.abstain_vals + EXCLUDED.abstain_vals")
+		}
+
+		if proposals[i].YesAddress > 0 {
+			query.Set("yes_addrs = added_proposal.yes_addrs + EXCLUDED.yes_addrs")
+		}
+		if proposals[i].NoAddress > 0 {
+			query.Set("no_addrs = added_proposal.no_addrs+ EXCLUDED.no_addrs")
+		}
+		if proposals[i].NoWithVetoAddress > 0 {
+			query.Set("no_with_veto_addrs = added_proposal.no_with_veto_addrs + EXCLUDED.no_with_veto_addrs")
+		}
+		if proposals[i].AbstainAddress > 0 {
+			query.Set("abstain_addrs = added_proposal.abstain_addrs + EXCLUDED.abstain_addrs")
+		}
+
+		if proposals[i].YesVotingPower.IsPositive() {
+			query.Set("yes_voting_power = EXCLUDED.yes_voting_power")
+		}
+		if proposals[i].NoVotingPower.IsPositive() {
+			query.Set("no_voting_power = EXCLUDED.no_voting_power")
+		}
+		if proposals[i].NoWithVetoVotingPower.IsPositive() {
+			query.Set("no_with_veto_voting_power = EXCLUDED.no_with_veto_voting_power")
+		}
+		if proposals[i].AbstainVotingPower.IsPositive() {
+			query.Set("abstain_voting_power = EXCLUDED.abstain_voting_power")
+		}
+
+		if _, err := query.Returning("xmax, id").Exec(ctx); err != nil {
+			return 0, err
+		}
+
+		if add.Xmax == 0 {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+func (tx Transaction) SaveVotes(ctx context.Context, votes ...*models.Vote) error {
+	if len(votes) == 0 {
+		return nil
+	}
+	_, err := tx.Tx().NewInsert().Model(&votes).Exec(ctx)
+	return err
+}
+
+type addedIbcClient struct {
+	bun.BaseModel `bun:"ibc_client"`
+	*models.IbcClient
+
+	Xmax uint64 `bun:"xmax"`
+}
+
+func (tx Transaction) SaveIbcClients(ctx context.Context, clients ...*models.IbcClient) (int64, error) {
+	if len(clients) == 0 {
+		return 0, nil
+	}
+
+	count := int64(0)
+
+	for i := range clients {
+		add := addedIbcClient{
+			IbcClient: clients[i],
+		}
+
+		query := tx.Tx().NewInsert().
+			Column("id", "created_at", "updated_at", "height", "tx_id", "creator_id", "latest_revision_height", "latest_revision_number", "frozen_revision_height", "frozen_revision_number", "type").
+			Column("trusting_period", "unbonding_period", "max_clock_drift", "trust_level_denominator", "trust_level_numerator", "connection_count", "chain_id").
+			Model(&add).
+			On("CONFLICT (id) DO UPDATE")
+
+		if clients[i].ConnectionCount > 0 {
+			query.Set("connection_count = added_ibc_client.connection_count + EXCLUDED.connection_count")
+		}
+		if clients[i].TrustingPeriod > 0 {
+			query.Set("trusting_period = EXCLUDED.trusting_period")
+		}
+		if clients[i].UnbondingPeriod > 0 {
+			query.Set("unbonding_period = EXCLUDED.unbonding_period")
+		}
+		if clients[i].MaxClockDrift > 0 {
+			query.Set("max_clock_drift = EXCLUDED.max_clock_drift")
+		}
+		if clients[i].TrustLevelDenominator > 0 {
+			query.Set("trust_level_denominator = EXCLUDED.trust_level_denominator")
+		}
+		if clients[i].TrustLevelNumerator > 0 {
+			query.Set("trust_level_numerator = EXCLUDED.trust_level_numerator")
+		}
+		if clients[i].LatestRevisionHeight > 0 {
+			query.Set("latest_revision_height = EXCLUDED.latest_revision_height")
+		}
+		if clients[i].LatestRevisionNumber > 0 {
+			query.Set("latest_revision_number = EXCLUDED.latest_revision_number")
+		}
+		if clients[i].FrozenRevisionHeight > 0 {
+			query.Set("frozen_revision_height = EXCLUDED.frozen_revision_height")
+		}
+		if clients[i].FrozenRevisionNumber > 0 {
+			query.Set("frozen_revision_number = EXCLUDED.frozen_revision_number")
+		}
+		if clients[i].ChainId != "" {
+			query.Set("chain_id = EXCLUDED.chain_id")
+		}
+		if !clients[i].UpdatedAt.IsZero() {
+			query.Set("updated_at = EXCLUDED.updated_at")
+		}
+
+		if _, err := query.Returning("xmax, id").Exec(ctx); err != nil {
+			return 0, err
+		}
+
+		if add.Xmax == 0 {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+func (tx Transaction) SaveIbcConnections(ctx context.Context, conns ...*models.IbcConnection) error {
+	if len(conns) == 0 {
+		return nil
+	}
+
+	for i := range conns {
+		query := tx.Tx().NewInsert().
+			Model(conns[i]).
+			Column("connection_id", "client_id", "counterparty_connection_id", "counterparty_client_id", "created_at", "connected_at", "height", "connection_height", "create_tx_id", "connection_tx_id", "channels_count").
+			On("CONFLICT (connection_id) DO UPDATE")
+
+		if conns[i].ChannelsCount != 0 {
+			query.Set("channels_count = ibc_connection.channels_count + EXCLUDED.channels_count")
+		}
+		if !conns[i].ConnectedAt.IsZero() {
+			query.Set("connected_at = EXCLUDED.connected_at")
+		}
+		if conns[i].ConnectionTxId > 0 {
+			query.Set("connection_tx_id = EXCLUDED.connection_tx_id")
+		}
+		if conns[i].ConnectionHeight > 0 {
+			query.Set("connection_height = EXCLUDED.connection_height")
+		}
+		if conns[i].CounterpartyConnectionId != "" {
+			query.Set("counterparty_connection_id = EXCLUDED.counterparty_connection_id")
+		}
+
+		if _, err := query.Exec(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (tx Transaction) SaveIbcChannels(ctx context.Context, channels ...*models.IbcChannel) error {
+	if len(channels) == 0 {
+		return nil
+	}
+
+	for i := range channels {
+		query := tx.Tx().NewInsert().
+			Model(channels[i]).
+			Column("id", "connection_id", "client_id", "port_id", "counterparty_port_id", "counterparty_channel_id", "version", "created_at", "confirmed_at", "height", "confirmation_height", "create_tx_id", "confirmation_tx_id", "ordering", "creator_id", "status", "received", "sent", "transfers_count").
+			On("CONFLICT (id) DO UPDATE")
+
+		if !channels[i].ConfirmedAt.IsZero() {
+			query.Set("confirmed_at = EXCLUDED.confirmed_at")
+		}
+		if channels[i].ConfirmationTxId > 0 {
+			query.Set("confirmation_tx_id = EXCLUDED.confirmation_tx_id")
+		}
+		if channels[i].ConfirmationHeight > 0 {
+			query.Set("confirmation_height = EXCLUDED.confirmation_height")
+		}
+		if channels[i].CounterpartyChannelId != "" {
+			query.Set("counterparty_channel_id = EXCLUDED.counterparty_channel_id")
+		}
+		if channels[i].Status == storageTypes.IbcChannelStatusClosed || channels[i].Status == storageTypes.IbcChannelStatusOpened {
+			query.Set("status = EXCLUDED.status")
+		}
+		if !channels[i].Received.IsZero() {
+			query.Set("received = ibc_channel.received + EXCLUDED.received")
+		}
+		if !channels[i].Sent.IsZero() {
+			query.Set("sent = ibc_channel.sent + EXCLUDED.sent")
+		}
+		if channels[i].TransfersCount > 0 {
+			query.Set("transfers_count = ibc_channel.transfers_count + EXCLUDED.transfers_count")
+		}
+
+		if _, err := query.Exec(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (tx Transaction) SaveIbcTransfers(ctx context.Context, transfers ...*models.IbcTransfer) error {
+	if len(transfers) == 0 {
+		return nil
+	}
+	_, err := tx.Tx().NewInsert().Model(&transfers).Exec(ctx)
 	return err
 }
 
@@ -546,6 +837,48 @@ func (tx Transaction) RollbackStakingLogs(ctx context.Context, height types.Leve
 	return
 }
 
+func (tx Transaction) RollbackProposals(ctx context.Context, height types.Level) (err error) {
+	_, err = tx.Tx().NewDelete().Model((*models.Proposal)(nil)).
+		Where("height = ?", height).
+		Exec(ctx)
+	return
+}
+
+func (tx Transaction) RollbackVotes(ctx context.Context, height types.Level) (err error) {
+	_, err = tx.Tx().NewDelete().Model((*models.Vote)(nil)).
+		Where("height = ?", height).
+		Exec(ctx)
+	return
+}
+
+func (tx Transaction) RollbackIbcClients(ctx context.Context, height types.Level) (err error) {
+	_, err = tx.Tx().NewDelete().Model((*models.IbcClient)(nil)).
+		Where("height = ?", height).
+		Exec(ctx)
+	return
+}
+
+func (tx Transaction) RollbackIbcConnections(ctx context.Context, height types.Level) (err error) {
+	_, err = tx.Tx().NewDelete().Model((*models.IbcConnection)(nil)).
+		Where("height = ?", height).
+		Exec(ctx)
+	return
+}
+
+func (tx Transaction) RollbackIbcChannels(ctx context.Context, height types.Level) (err error) {
+	_, err = tx.Tx().NewDelete().Model((*models.IbcChannel)(nil)).
+		Where("height = ?", height).
+		Exec(ctx)
+	return
+}
+
+func (tx Transaction) RollbackIbcTransfers(ctx context.Context, height types.Level) (err error) {
+	_, err = tx.Tx().NewDelete().Model((*models.IbcChannel)(nil)).
+		Where("height = ?", height).
+		Exec(ctx)
+	return
+}
+
 func (tx Transaction) DeleteBalances(ctx context.Context, ids []uint64) error {
 	if len(ids) == 0 {
 		return nil
@@ -617,7 +950,7 @@ func (tx Transaction) SaveRollup(ctx context.Context, rollup *models.Rollup) err
 }
 
 func (tx Transaction) UpdateRollup(ctx context.Context, rollup *models.Rollup) error {
-	if rollup == nil || rollup.IsEmpty() {
+	if rollup == nil || (rollup.IsEmpty() && !rollup.Verified) {
 		return nil
 	}
 
@@ -659,6 +992,35 @@ func (tx Transaction) UpdateRollup(ctx context.Context, rollup *models.Rollup) e
 	if rollup.Links != nil {
 		query = query.Set("links = ?", pq.Array(rollup.Links))
 	}
+	if rollup.Type != "" {
+		query = query.Set("type = ?", rollup.Type)
+	}
+	if rollup.Category != "" {
+		query = query.Set("category = ?", rollup.Category)
+	}
+	if rollup.Tags != nil {
+		query = query.Set("tags = ?", pq.Array(rollup.Tags))
+	}
+	if rollup.Provider != "" {
+		query = query.Set("provider = ?", rollup.Provider)
+	}
+	if rollup.Compression != "" {
+		query = query.Set("compression = ?", rollup.Compression)
+	}
+	if rollup.VM != "" {
+		query = query.Set("vm = ?", rollup.VM)
+	}
+	if rollup.DeFiLama != "" {
+		query = query.Set("defi_lama = ?", rollup.DeFiLama)
+	}
+	if rollup.SettledOn != "" {
+		query = query.Set("settled_on = ?", rollup.SettledOn)
+	}
+	if rollup.Color != "" {
+		query = query.Set("color = ?", rollup.Color)
+	}
+
+	query = query.Set("verified = ?", rollup.Verified)
 
 	_, err := query.Exec(ctx)
 	return err
@@ -771,4 +1133,59 @@ func (tx Transaction) Delegation(ctx context.Context, validatorId, addressId uin
 func (tx Transaction) RefreshLeaderboard(ctx context.Context) error {
 	_, err := tx.Tx().ExecContext(ctx, "REFRESH MATERIALIZED VIEW leaderboard;")
 	return err
+}
+
+func (tx Transaction) ActiveProposals(ctx context.Context) (proposals []models.Proposal, err error) {
+	err = tx.Tx().NewSelect().Model(&proposals).
+		Where("status = ?", storageTypes.ProposalStatusActive).
+		Scan(ctx)
+	return
+}
+
+func (tx Transaction) BondedValidators(ctx context.Context, limit int) (validators []models.Validator, err error) {
+	err = tx.Tx().NewSelect().Model(&validators).
+		Column("id", "stake").
+		OrderExpr("stake desc").
+		Limit(limit).
+		Scan(ctx)
+	return
+}
+
+func (tx Transaction) ProposalVotes(ctx context.Context, proposalId uint64, limit, offset int) (votes []models.Vote, err error) {
+	query := tx.Tx().NewSelect().Model(&votes).
+		Where("proposal_id = ?", proposalId)
+
+	if limit < 1 {
+		limit = 10
+	}
+	query = query.Limit(limit)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+
+	err = query.Scan(ctx)
+	return
+}
+
+func (tx Transaction) AddressDelegations(ctx context.Context, addressId uint64) (val []models.Delegation, err error) {
+	err = tx.Tx().NewSelect().Model(&val).
+		Where("address_id = ?", addressId).
+		Scan(ctx)
+	return
+}
+
+func (tx Transaction) Proposal(ctx context.Context, id uint64) (proposal models.Proposal, err error) {
+	err = tx.Tx().NewSelect().Model(&proposal).
+		Where("id = ?", id).
+		Column("id", "changes", "type").
+		Scan(ctx)
+	return
+}
+
+func (tx Transaction) IbcConnection(ctx context.Context, id string) (conn models.IbcConnection, err error) {
+	err = tx.Tx().NewSelect().Model(&conn).
+		Where("connection_id = ?", id).
+		Column("client_id").
+		Scan(ctx)
+	return
 }

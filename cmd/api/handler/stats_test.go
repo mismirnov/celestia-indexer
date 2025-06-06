@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/celenium-io/celestia-indexer/cmd/api/handler/responses"
 	"github.com/celenium-io/celestia-indexer/internal/storage"
@@ -25,13 +24,14 @@ import (
 // StatsTestSuite -
 type StatsTestSuite struct {
 	suite.Suite
-	stats   *mock.MockIStats
-	ns      *mock.MockINamespace
-	price   *mock.MockIPrice
-	state   *mock.MockIState
-	echo    *echo.Echo
-	handler StatsHandler
-	ctrl    *gomock.Controller
+	stats    *mock.MockIStats
+	ns       *mock.MockINamespace
+	state    *mock.MockIState
+	ibc      *mock.MockIIbcTransfer
+	channels *mock.MockIIbcChannel
+	echo     *echo.Echo
+	handler  StatsHandler
+	ctrl     *gomock.Controller
 }
 
 // SetupSuite -
@@ -40,10 +40,11 @@ func (s *StatsTestSuite) SetupSuite() {
 	s.echo.Validator = NewCelestiaApiValidator()
 	s.ctrl = gomock.NewController(s.T())
 	s.stats = mock.NewMockIStats(s.ctrl)
-	s.price = mock.NewMockIPrice(s.ctrl)
 	s.ns = mock.NewMockINamespace(s.ctrl)
 	s.state = mock.NewMockIState(s.ctrl)
-	s.handler = NewStatsHandler(s.stats, s.ns, s.price, s.state)
+	s.ibc = mock.NewMockIIbcTransfer(s.ctrl)
+	s.channels = mock.NewMockIIbcChannel(s.ctrl)
+	s.handler = NewStatsHandler(s.stats, s.ns, s.ibc, s.channels, s.state)
 }
 
 // TearDownSuite -
@@ -374,76 +375,6 @@ func (s *StatsTestSuite) TestNamespaceStatsHistogram() {
 	}
 }
 
-func (s *StatsTestSuite) TestPriceSeries() {
-	for _, tf := range []string{
-		storage.PriceTimeframeDay,
-		storage.PriceTimeframeHour,
-		storage.PriceTimeframeMinute,
-	} {
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		rec := httptest.NewRecorder()
-		c := s.echo.NewContext(req, rec)
-		c.SetPath("/v1/stats/price/series/:timeframe")
-		c.SetParamNames("timeframe")
-		c.SetParamValues(tf)
-
-		s.price.EXPECT().
-			Get(gomock.Any(), tf, time.Time{}, time.Time{}, 100).
-			Return([]storage.Price{
-				{
-					Time:  testTime,
-					Open:  decimal.RequireFromString("0.1"),
-					High:  decimal.RequireFromString("0.2"),
-					Low:   decimal.RequireFromString("0.01"),
-					Close: decimal.RequireFromString("0.15"),
-				},
-			}, nil)
-
-		s.Require().NoError(s.handler.PriceSeries(c))
-		s.Require().Equal(http.StatusOK, rec.Code)
-
-		var response []responses.Price
-		err := json.NewDecoder(rec.Body).Decode(&response)
-		s.Require().NoError(err)
-		s.Require().Len(response, 1)
-
-		item := response[0]
-		s.Require().Equal("0.1", item.Open)
-		s.Require().Equal("0.2", item.High)
-		s.Require().Equal("0.01", item.Low)
-		s.Require().Equal("0.15", item.Close)
-	}
-}
-
-func (s *StatsTestSuite) TestPriceCurrent() {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := s.echo.NewContext(req, rec)
-	c.SetPath("/v1/stats/price/current")
-
-	s.price.EXPECT().
-		Last(gomock.Any()).
-		Return(storage.Price{
-			Time:  testTime,
-			Open:  decimal.RequireFromString("0.1"),
-			High:  decimal.RequireFromString("0.2"),
-			Low:   decimal.RequireFromString("0.01"),
-			Close: decimal.RequireFromString("0.15"),
-		}, nil)
-
-	s.Require().NoError(s.handler.PriceCurrent(c))
-	s.Require().Equal(http.StatusOK, rec.Code)
-
-	var response responses.Price
-	err := json.NewDecoder(rec.Body).Decode(&response)
-	s.Require().NoError(err)
-
-	s.Require().Equal("0.1", response.Open)
-	s.Require().Equal("0.2", response.High)
-	s.Require().Equal("0.01", response.Low)
-	s.Require().Equal("0.15", response.Close)
-}
-
 func (s *StatsTestSuite) TestSquareSize() {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -582,4 +513,107 @@ func (s *StatsTestSuite) TestMessgaesCount24h() {
 
 	s.Require().EqualValues("test", response[0].Name)
 	s.Require().EqualValues(100, response[0].Value)
+}
+
+func (s *StatsTestSuite) TestSizeGroups() {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := s.echo.NewContext(req, rec)
+	c.SetPath("/v1/stats/size_groups")
+
+	s.stats.EXPECT().
+		SizeGroups(gomock.Any(), nil).
+		Return([]storage.SizeGroup{
+			{
+				Name:    "test",
+				Size:    100,
+				AvgSize: 10,
+				Count:   10,
+			},
+		}, nil)
+
+	s.Require().NoError(s.handler.SizeGroups(c))
+	s.Require().Equal(http.StatusOK, rec.Code)
+
+	var response []responses.SizeGroup
+	err := json.NewDecoder(rec.Body).Decode(&response)
+	s.Require().NoError(err)
+	s.Require().Len(response, 1)
+
+	s.Require().EqualValues("test", response[0].Name)
+	s.Require().EqualValues(100, response[0].Size)
+	s.Require().EqualValues(10, response[0].AvgSize)
+	s.Require().EqualValues(10, response[0].Count)
+}
+
+func (s *StatsTestSuite) TestIbcSeries() {
+	for _, name := range []string{
+		"count",
+		"amount",
+	} {
+
+		for _, tf := range []storage.Timeframe{
+			storage.TimeframeHour,
+			storage.TimeframeDay,
+			storage.TimeframeMonth,
+		} {
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			rec := httptest.NewRecorder()
+			c := s.echo.NewContext(req, rec)
+			c.SetPath("/v1/stats/ibc/series/:id/:name/:timeframe")
+			c.SetParamNames("id", "name", "timeframe")
+			c.SetParamValues("channel-1", name, string(tf))
+
+			s.ibc.EXPECT().
+				Series(gomock.Any(), "channel-1", tf, name, storage.NewSeriesRequest(0, 0)).
+				Return([]storage.HistogramItem{
+					{
+						Value: "1000",
+						Time:  testTime,
+					},
+				}, nil)
+
+			s.Require().NoError(s.handler.IbcSeries(c))
+			s.Require().Equal(http.StatusOK, rec.Code)
+
+			var response []responses.HistogramItem
+			err := json.NewDecoder(rec.Body).Decode(&response)
+			s.Require().NoError(err)
+			s.Require().Len(response, 1)
+
+			item := response[0]
+			s.Require().Equal("1000", item.Value)
+		}
+	}
+}
+
+func (s *StatsTestSuite) TestIbcChainStats() {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := s.echo.NewContext(req, rec)
+	c.SetPath("/v1/stats/ibc/chains")
+
+	s.channels.EXPECT().
+		StatsByChain(gomock.Any(), 10, 0).
+		Return([]storage.ChainStats{
+			{
+				Chain:    "test",
+				Received: decimal.RequireFromString("101"),
+				Sent:     decimal.RequireFromString("99"),
+				Flow:     decimal.RequireFromString("200"),
+			},
+		}, nil)
+
+	s.Require().NoError(s.handler.IbcByChains(c))
+	s.Require().Equal(http.StatusOK, rec.Code)
+
+	var response []responses.IbcChainStats
+	err := json.NewDecoder(rec.Body).Decode(&response)
+	s.Require().NoError(err)
+	s.Require().Len(response, 1)
+
+	s.Require().EqualValues("test", response[0].Chain)
+	s.Require().EqualValues("101", response[0].Received)
+	s.Require().EqualValues("99", response[0].Sent)
+	s.Require().EqualValues("200", response[0].Flow)
 }

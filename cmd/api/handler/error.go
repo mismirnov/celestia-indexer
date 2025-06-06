@@ -15,6 +15,9 @@ import (
 var (
 	errInvalidHashLength = errors.New("invalid hash: should be 32 bytes length")
 	errInvalidAddress    = errors.New("invalid address")
+	errUnknownAddress    = errors.New("unknown address")
+	errUnknownNamespace  = errors.New("unknown namespace")
+	errInvalidApiKey     = errors.New("invalid api key")
 	errCancelRequest     = "pq: canceling statement due to user request"
 )
 
@@ -61,7 +64,7 @@ func handleError(c echo.Context, err error, noRows NoRows) error {
 	if noRows.IsNoRows(err) {
 		return c.NoContent(http.StatusNoContent)
 	}
-	if errors.Is(err, errInvalidAddress) {
+	if errors.Is(err, errInvalidAddress) || errors.Is(err, errUnknownAddress) {
 		return badRequestError(c, err)
 	}
 	return internalServerError(c, err)

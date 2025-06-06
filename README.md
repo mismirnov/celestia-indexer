@@ -1,3 +1,5 @@
+
+
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fcelenium-io%2Fcelestia-indexer.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fcelenium-io%2Fcelestia-indexer?ref=badge_shield&issueType=license)
 [![Build Status](https://github.com/celenium-io/celestia-indexer/workflows/Build/badge.svg)](https://github.com/celenium-io/celestia-indexer/actions?query=branch%3Amaster+workflow%3A%22Build%22)
 [![made_with golang](https://img.shields.io/badge/made_with-golang-blue.svg)](https://golang.org/)
@@ -15,7 +17,7 @@ This is an indexing layer for Celestia DA written in Golang that operates on top
 
 - Git
 - [Docker](https://docs.docker.com/engine/install/)
-- [Go 1.23](https://go.dev/doc/install) (for development and testing)
+- [Go 1.24](https://go.dev/doc/install) (for development and testing)
 
 ### Local run ###
 

@@ -52,6 +52,30 @@ func TestTracker_computeMetrics(t *testing.T) {
 		require.Equal(t, "3.000000", state.Median)
 		require.Equal(t, "4.000000", state.Fast)
 	})
+
+	t.Run("compute metrics: less than default gas price", func(t *testing.T) {
+		tracker := NewTracker(nil, nil, nil, nil)
+
+		tracker.q.Push(info{
+			Height:      1,
+			Percentiles: []decimal.Decimal{},
+		})
+		tracker.q.Push(info{
+			Height:      2,
+			Percentiles: []decimal.Decimal{},
+		})
+		tracker.q.Push(info{
+			Height:      3,
+			Percentiles: []decimal.Decimal{},
+		})
+
+		err := tracker.computeMetrics()
+		require.NoError(t, err)
+		state := tracker.State()
+		require.Equal(t, "0.002000", state.Slow)
+		require.Equal(t, "0.002000", state.Median)
+		require.Equal(t, "0.002000", state.Fast)
+	})
 }
 
 func TestTracker_processBlock(t *testing.T) {
@@ -73,7 +97,7 @@ func TestTracker_processBlock(t *testing.T) {
 			BytesInBlock: 0,
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second*3)
 		defer cancel()
 
 		err := tracker.processBlock(ctx, blockStats)
@@ -106,7 +130,7 @@ func TestTracker_processBlock(t *testing.T) {
 			BytesInBlock: maxBlockSize - 1000,
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second*3)
 		defer cancel()
 
 		err := tracker.processBlock(ctx, blockStats)
@@ -157,7 +181,7 @@ func TestTracker_processBlock(t *testing.T) {
 			BytesInBlock: maxBlockSize - 1000,
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second*3)
 		defer cancel()
 
 		err := tracker.processBlock(ctx, blockStats)
@@ -207,7 +231,7 @@ func TestTracker_processBlock(t *testing.T) {
 			BytesInBlock: 1000,
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second*3)
 		defer cancel()
 
 		err := tracker.processBlock(ctx, blockStats)

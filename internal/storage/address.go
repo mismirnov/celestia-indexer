@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/celenium-io/celestia-indexer/pkg/types"
+	celestials "github.com/celenium-io/celestial-module/pkg/storage"
 
 	"github.com/dipdup-net/indexer-sdk/pkg/storage"
 	"github.com/uptrace/bun"
@@ -39,8 +40,10 @@ type Address struct {
 	LastHeight types.Level `bun:"last_height"                 comment:"Block number of the last address occurrence."`
 	Hash       []byte      `bun:"hash"                        comment:"Address hash."`
 	Address    string      `bun:"address,unique:address_idx"  comment:"Human-readable address."`
+	Name       string      `bun:"name,nullzero"               comment:"Cosmos address name"`
 
-	Balance Balance `bun:"rel:has-one,join:id=id"`
+	Balance    Balance               `bun:"rel:has-one,join:id=id"`
+	Celestials *celestials.Celestial `bun:"rel:has-one,join:id=address_id"`
 }
 
 // TableName -

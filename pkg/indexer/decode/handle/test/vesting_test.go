@@ -23,13 +23,14 @@ import (
 // MsgCreateVestingAccount
 
 func createMsgCreateVestingAccount() types.Msg {
+	amount, _ := math.NewIntFromString("1000")
 	m := cosmosVestingTypes.MsgCreateVestingAccount{
 		FromAddress: "celestia1j33593mn9urzydakw06jdun8f37shlucmhr8p6",
 		ToAddress:   "celestia1vsvx8n7f8dh5udesqqhgrjutyun7zqrgehdq2l",
 		Amount: types.Coins{
 			types.Coin{
 				Denom:  "utia",
-				Amount: math.NewInt(1000),
+				Amount: amount,
 			},
 		},
 		EndTime: 0,
@@ -193,7 +194,7 @@ func createMsgCreatePeriodicVestingAccount() types.Msg {
 		VestingPeriods: []cosmosVestingTypes.Period{
 			{
 				Length: 1000,
-				Amount: types.NewCoins(types.NewCoin("utia", types.OneInt())),
+				Amount: types.NewCoins(types.NewCoin("utia", math.OneInt())),
 			},
 		},
 	}

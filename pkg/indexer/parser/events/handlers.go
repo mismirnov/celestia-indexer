@@ -5,7 +5,6 @@ package events
 
 import (
 	"github.com/celenium-io/celestia-indexer/internal/storage"
-	"github.com/celenium-io/celestia-indexer/internal/storage/types"
 	storageTypes "github.com/celenium-io/celestia-indexer/internal/storage/types"
 	"github.com/celenium-io/celestia-indexer/pkg/indexer/decode/context"
 	"github.com/celenium-io/celestia-indexer/pkg/indexer/decode/decoder"
@@ -22,9 +21,27 @@ var eventHandlers = map[storageTypes.MsgType]EventHandler{
 	storageTypes.MsgWithdrawValidatorCommission: handleWithdrawValidatorCommission,
 	storageTypes.MsgWithdrawDelegatorReward:     handleWithdrawDelegatorRewards,
 	storageTypes.MsgUnjail:                      handleUnjail,
+	storageTypes.MsgSubmitProposal:              handleSubmitProposal,
+	storageTypes.MsgDeposit:                     handleDeposit,
+	storageTypes.MsgVote:                        handleVote,
+	storageTypes.MsgVoteWeighted:                handleVote,
+	storageTypes.MsgCreateClient:                handleCreateClient,
+	storageTypes.MsgUpdateClient:                handleUpdateClient,
+	storageTypes.MsgConnectionOpenInit:          handleConnectionOpenInit,
+	storageTypes.MsgConnectionOpenTry:           handleConnectionOpenInit,
+	storageTypes.MsgConnectionOpenConfirm:       handleConnectionOpenConfirm,
+	storageTypes.MsgConnectionOpenAck:           handleConnectionOpenConfirm,
+	storageTypes.MsgChannelOpenInit:             handleChannelOpenInit,
+	storageTypes.MsgChannelOpenTry:              handleChannelOpenInit,
+	storageTypes.MsgChannelOpenConfirm:          handleChannelOpenConfirm,
+	storageTypes.MsgChannelOpenAck:              handleChannelOpenConfirm,
+	storageTypes.MsgChannelCloseInit:            handleChannelClose,
+	storageTypes.MsgChannelCloseConfirm:         handleChannelClose,
+	storageTypes.MsgAcknowledgement:             handleAcknowledgement,
+	storageTypes.MsgRecvPacket:                  handleRecvPacket,
 }
 
-func Handle(ctx *context.Context, events []storage.Event, msg *storage.Message, idx *int) error {
+func handle(ctx *context.Context, events []storage.Event, msg *storage.Message, idx *int, eventHandlers map[storageTypes.MsgType]EventHandler, stopKey string) error {
 	if handler, ok := eventHandlers[msg.Type]; ok {
 		return handler(ctx, events, msg, idx)
 	}
@@ -34,11 +51,11 @@ func Handle(ctx *context.Context, events []storage.Event, msg *storage.Message, 
 
 	startIndex := *idx
 	for _, event := range events[startIndex:] {
-		if event.Type != types.EventTypeMessage {
+		if event.Type != storageTypes.EventTypeMessage {
 			*idx++
 			continue
 		}
-		if action := decoder.StringFromMap(event.Data, "action"); action == "" {
+		if action := decoder.StringFromMap(event.Data, stopKey); action == "" {
 			*idx++
 			continue
 		}
@@ -46,4 +63,46 @@ func Handle(ctx *context.Context, events []storage.Event, msg *storage.Message, 
 	}
 
 	return nil
+}
+
+func Handle(ctx *context.Context, events []storage.Event, msg *storage.Message, idx *int) error {
+	return handle(ctx, events, msg, idx, eventHandlers, "action")
+}
+
+var ibcEventHandlers = map[storageTypes.MsgType]EventHandler{
+	storageTypes.MsgDelegate:                    processDelegate,
+	storageTypes.MsgBeginRedelegate:             processRedelegate,
+	storageTypes.MsgUndelegate:                  processUndelegate,
+	storageTypes.MsgCancelUnbondingDelegation:   processCancelUnbonding,
+	storageTypes.MsgExec:                        processExec,
+	storageTypes.MsgWithdrawValidatorCommission: processWithdrawValidatorCommission,
+	storageTypes.MsgWithdrawDelegatorReward:     processWithdrawDelegatorRewards,
+	storageTypes.MsgUnjail:                      processUnjail,
+	storageTypes.MsgSubmitProposal:              processSubmitProposal,
+	storageTypes.MsgDeposit:                     processDeposit,
+	storageTypes.MsgVote:                        processVote,
+	storageTypes.MsgVoteWeighted:                processVote,
+	storageTypes.MsgCreateClient:                processCreateClient,
+	storageTypes.MsgUpdateClient:                processUpdateClient,
+	storageTypes.MsgConnectionOpenInit:          processConnectionOpenInit,
+	storageTypes.MsgConnectionOpenTry:           processConnectionOpenInit,
+	storageTypes.MsgConnectionOpenConfirm:       processConnectionOpenConfirm,
+	storageTypes.MsgConnectionOpenAck:           processConnectionOpenConfirm,
+	storageTypes.MsgChannelOpenInit:             processChannelOpenInit,
+	storageTypes.MsgChannelOpenTry:              processChannelOpenInit,
+	storageTypes.MsgChannelOpenConfirm:          processChannelOpenConfirm,
+	storageTypes.MsgChannelOpenAck:              processChannelOpenConfirm,
+	storageTypes.MsgChannelCloseInit:            processChannelClose,
+	storageTypes.MsgChannelCloseConfirm:         processChannelClose,
+}
+
+func toTheNextAction(events []storage.Event, idx *int) {
+	if len(events)-1 <= *idx {
+		return
+	}
+	var action = decoder.StringFromMap(events[*idx].Data, "action")
+	for action == "" && len(events)-1 > *idx {
+		*idx += 1
+		action = decoder.StringFromMap(events[*idx].Data, "action")
+	}
 }

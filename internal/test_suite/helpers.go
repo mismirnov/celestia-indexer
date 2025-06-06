@@ -3,7 +3,13 @@
 
 package testsuite
 
-import "encoding/hex"
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"math/big"
+
+	"github.com/shopspring/decimal"
+)
 
 // Ptr - returns pointer of value  for testing purpose
 //
@@ -21,4 +27,26 @@ func MustHexDecode(s string) []byte {
 		panic(err)
 	}
 	return data
+}
+
+// RandomDecimal - returns random decimal value
+//
+//	data := RandomDecimal()
+func RandomDecimal() decimal.Decimal {
+	val, _ := rand.Int(rand.Reader, big.NewInt(1000))
+	return decimal.NewFromBigInt(val, 1)
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+// RandomText - generates random string with fixed size
+//
+//	data := RandomText(10)
+func RandomText(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		ids, _ := rand.Int(rand.Reader, big.NewInt(int64(len(letterRunes))))
+		b[i] = letterRunes[ids.Int64()]
+	}
+	return string(b)
 }

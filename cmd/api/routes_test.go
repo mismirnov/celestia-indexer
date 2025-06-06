@@ -18,7 +18,7 @@ import (
 func TestRoutes(t *testing.T) {
 	var expectedRoutes = map[string]struct{}{
 		"/v1/address/:hash/redelegations GET":                 {},
-		"/v1/namespace/count GET":                             {},
+		"/v1/address/:hash/celestials GET":                    {},
 		"/v1/validators/count GET":                            {},
 		"/v1/validators/:id/blocks GET":                       {},
 		"/v1/validators/:id/delegators GET":                   {},
@@ -35,6 +35,7 @@ func TestRoutes(t *testing.T) {
 		"/v1/stats/series/:name/:timeframe/cumulative GET":    {},
 		"/v1/search GET":                                      {},
 		"/v1/stats/staking/series/:id/:name/:timeframe GET":   {},
+		"/v1/stats/ibc/series/:id/:name/:timeframe GET":       {},
 		"/v1/rollup/:id GET":                                  {},
 		"/v1/auth/rollup/new POST":                            {},
 		"/v1/address/:hash GET":                               {},
@@ -51,11 +52,13 @@ func TestRoutes(t *testing.T) {
 		"/v1/address/:hash/vestings GET":                      {},
 		"/v1/tx/:hash/events GET":                             {},
 		"/v1/stats/changes_24h GET":                           {},
+		"/v1/stats/ibc/chains GET":                            {},
 		"/v1/rollup/count GET":                                {},
 		"/v1/auth/rollup/:id PATCH":                           {},
+		"/v1/auth/rollup/:id/verify PATCH":                    {},
+		"/v1/auth/rollup/unverified GET":                      {},
 		"/v1/address/:hash/undelegations GET":                 {},
 		"/v1/block/:height/messages GET":                      {},
-		"/v1/namespace/active GET":                            {},
 		"/v1/namespace_by_hash/:hash GET":                     {},
 		"/v1/vesting/:id/periods GET":                         {},
 		"/v1/constants GET":                                   {},
@@ -74,7 +77,6 @@ func TestRoutes(t *testing.T) {
 		"/v1/address/:hash/granters GET":                      {},
 		"/v1/blob POST":                                       {},
 		"/v1/blob GET":                                        {},
-		"/v1/stats/price/current GET":                         {},
 		"/v1/swagger/doc.json GET":                            {},
 		"/v1/auth/rollup/:id DELETE":                          {},
 		"/v1/enums GET":                                       {},
@@ -87,8 +89,8 @@ func TestRoutes(t *testing.T) {
 		"/v1/block/:height GET":                               {},
 		"/v1/tx/:hash GET":                                    {},
 		"/v1/tx/:hash/messages GET":                           {},
-		"/v1/stats/price/series/:timeframe GET":               {},
 		"/v1/gas/price GET":                                   {},
+		"/v1/gas/price/:priority GET":                         {},
 		"/v1/block/:height/ods GET":                           {},
 		"/v1/tx/:hash/blobs GET":                              {},
 		"/v1/namespace/:id/:version/messages GET":             {},
@@ -100,12 +102,27 @@ func TestRoutes(t *testing.T) {
 		"/v1/rollup/:id/export GET":                           {},
 		"/v1/docs GET":                                        {},
 		"/v1/stats/square_size GET":                           {},
+		"/v1/stats/size_groups GET":                           {},
 		"/v1/stats/rollup_stats_24h GET":                      {},
 		"/v1/stats/messages_count_24h GET":                    {},
-		"/v1/rollup/stats/series GET":                         {},
+		"/v1/rollup/stats/series/:timeframe GET":              {},
+		"/v1/rollup/group GET":                                {},
+		"/v1/proposal GET":                                    {},
+		"/v1/proposal/:id GET":                                {},
+		"/v1/ibc/client GET":                                  {},
+		"/v1/ibc/client/:id GET":                              {},
+		"/v1/ibc/connection GET":                              {},
+		"/v1/ibc/connection/:id GET":                          {},
+		"/v1/ibc/channel GET":                                 {},
+		"/v1/ibc/channel/:id GET":                             {},
+		"/v1/ibc/transfer GET":                                {},
+		"/v1/proposal/:id/votes GET":                          {},
+		"/v1/address/:hash/votes GET":                         {},
+		"/v1/validators/:id/votes GET":                        {},
+		"/v1/blob/proofs POST":                                {},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	db := postgres.Storage{
@@ -116,7 +133,7 @@ func TestRoutes(t *testing.T) {
 		BlobReceiver: "dal_node",
 	}
 
-	e := initEcho(apiCfg, db, "development")
+	e := initEcho(apiCfg, "development")
 	defer func() {
 		err := e.Close()
 		require.NoError(t, err)

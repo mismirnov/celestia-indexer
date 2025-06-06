@@ -8,13 +8,16 @@ import (
 
 	"github.com/celenium-io/celestia-indexer/internal/stats"
 	models "github.com/celenium-io/celestia-indexer/internal/storage"
+	"github.com/celenium-io/celestia-indexer/internal/storage/postgres/migrations"
+	celestials "github.com/celenium-io/celestial-module/pkg/storage"
+	celestialsPg "github.com/celenium-io/celestial-module/pkg/storage/postgres"
 	"github.com/dipdup-net/go-lib/config"
 	"github.com/dipdup-net/go-lib/database"
 	"github.com/dipdup-net/indexer-sdk/pkg/storage"
 	"github.com/dipdup-net/indexer-sdk/pkg/storage/postgres"
 	"github.com/pkg/errors"
 	"github.com/uptrace/bun"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/uptrace/bun/migrate"
 )
 
 // Storage -
@@ -37,7 +40,6 @@ type Storage struct {
 	VestingAccounts models.IVestingAccount
 	VestingPeriods  models.IVestingPeriod
 	Namespace       models.INamespace
-	Price           models.IPrice
 	State           models.IState
 	Stats           models.IStats
 	Search          models.ISearch
@@ -49,14 +51,27 @@ type Storage struct {
 	Jails           models.IJail
 	Rollup          models.IRollup
 	Grants          models.IGrant
+	ApiKeys         models.IApiKey
+	Proposals       models.IProposal
+	Votes           models.IVote
+	IbcClients      models.IIbcClient
+	IbcConnections  models.IIbcConnection
+	IbcChannels     models.IIbcChannel
+	IbcTransfers    models.IIbcTransfer
+	Celestials      celestials.ICelestial
+	CelestialState  celestials.ICelestialState
 	Notificator     *Notificator
 
 	export models.Export
 }
 
 // Create -
-func Create(ctx context.Context, cfg config.Database, scriptsDir string) (Storage, error) {
-	strg, err := postgres.Create(ctx, cfg, initDatabase)
+func Create(ctx context.Context, cfg config.Database, scriptsDir string, withMigrations bool) (Storage, error) {
+	init := initDatabase
+	if withMigrations {
+		init = initDatabaseWithMigrations
+	}
+	strg, err := postgres.Create(ctx, cfg, init)
 	if err != nil {
 		return Storage{}, err
 	}
@@ -78,7 +93,6 @@ func Create(ctx context.Context, cfg config.Database, scriptsDir string) (Storag
 		Address:         NewAddress(strg.Connection()),
 		VestingAccounts: NewVestingAccount(strg.Connection()),
 		VestingPeriods:  NewVestingPeriod(strg.Connection()),
-		Price:           NewPrice(strg.Connection()),
 		Tx:              NewTx(strg.Connection()),
 		State:           NewState(strg.Connection()),
 		Namespace:       NewNamespace(strg.Connection()),
@@ -92,6 +106,15 @@ func Create(ctx context.Context, cfg config.Database, scriptsDir string) (Storag
 		Jails:           NewJail(strg.Connection()),
 		Rollup:          NewRollup(strg.Connection()),
 		Grants:          NewGrant(strg.Connection()),
+		ApiKeys:         NewApiKey(strg.Connection()),
+		Proposals:       NewProposal(strg.Connection()),
+		Votes:           NewVote(strg.Connection()),
+		IbcClients:      NewIbcClient(strg.Connection()),
+		IbcConnections:  NewIbcConnection(strg.Connection()),
+		IbcChannels:     NewIbcChannel(strg.Connection()),
+		IbcTransfers:    NewIbcTransfer(strg.Connection()),
+		Celestials:      celestialsPg.NewCelestials(strg.Connection()),
+		CelestialState:  celestialsPg.NewCelestialState(strg.Connection()),
 		Notificator:     NewNotificator(cfg, strg.Connection().DB()),
 
 		export: export,
@@ -146,6 +169,21 @@ func initDatabase(ctx context.Context, conn *database.Bun) error {
 	return createIndices(ctx, conn)
 }
 
+func initDatabaseWithMigrations(ctx context.Context, conn *database.Bun) error {
+	exists, err := checkTablesExists(ctx, conn)
+	if err != nil {
+		return errors.Wrap(err, "check table exists")
+	}
+
+	if exists {
+		if err := migrateDatabase(ctx, conn); err != nil {
+			return errors.Wrap(err, "migrate database")
+		}
+	}
+
+	return initDatabase(ctx, conn)
+}
+
 func (s Storage) CreateListener() models.Listener {
 	return NewNotificator(s.cfg, s.Notificator.db)
 }
@@ -162,7 +200,8 @@ func createHypertables(ctx context.Context, conn *database.Bun) error {
 			&models.BlobLog{},
 			&models.Jail{},
 			&models.StakingLog{},
-			&models.Price{},
+			&models.Vote{},
+			&models.IbcTransfer{},
 		} {
 			if _, err := tx.ExecContext(ctx,
 				`SELECT create_hypertable(?, 'time', chunk_time_interval => INTERVAL '1 month', if_not_exists => TRUE);`,
@@ -190,6 +229,20 @@ func createExtensions(ctx context.Context, conn *database.Bun) error {
 	})
 }
 
+func migrateDatabase(ctx context.Context, db *database.Bun) error {
+	migrator := migrate.NewMigrator(db.DB(), migrations.Migrations)
+	if err := migrator.Init(ctx); err != nil {
+		return err
+	}
+	if err := migrator.Lock(ctx); err != nil {
+		return err
+	}
+	defer migrator.Unlock(ctx) //nolint:errcheck
+
+	_, err := migrator.Migrate(ctx)
+	return err
+}
+
 func (s Storage) Close() error {
 	if err := s.export.Close(); err != nil {
 		return err
@@ -200,12 +253,12 @@ func (s Storage) Close() error {
 	return nil
 }
 
-func (s Storage) SetTracer(tp trace.TracerProvider) {
-	s.Connection().DB().AddQueryHook(
-		NewSentryHook(
-			s.cfg.Database,
-			tp.Tracer("db"),
-			true,
-		),
-	)
+func checkTablesExists(ctx context.Context, db *database.Bun) (bool, error) {
+	var exists bool
+	err := db.DB().NewRaw(`SELECT EXISTS (
+		SELECT FROM information_schema.tables 
+		WHERE  table_schema = 'public'
+		AND    table_name   = 'state'
+	)`).Scan(ctx, &exists)
+	return exists, err
 }

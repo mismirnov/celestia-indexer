@@ -35,13 +35,13 @@ func TestParseEvents_SuccessTx(t *testing.T) {
 		"type": "coin_spent",
 		"attributes": [
 			{
-				"key": "c3BlbmRlcg==",
-				"value": "Y2VsZXN0aWExcDMzMHN0YXB1c3lrZnNzNDdxcmhxbHVram5jdmd5emY2Z2R1ZnM=",
+				"key": "spender",
+				"value": "celestia1p330stapusykfss47qrhqlukjncvgyzf6gdufs",
 				"index": true
 			},
 			{
-				"key": "YW1vdW50",
-				"value": "NDA0OTR1dGlh",
+				"key": "amount",
+				"value": "40494utia",
 				"index": true
 			}
 		]
@@ -60,7 +60,7 @@ func TestParseEvents_SuccessTx(t *testing.T) {
 		Events:    events,
 		Codespace: "celestia-explorer",
 	}
-	block, now := testsuite.CreateTestBlock(txRes, 1)
+	block, now := testsuite.CreateTestBlockWithAppVersion(txRes, 1, 4)
 
 	ctx := context.NewContext()
 	resultEvents, err := parseEvents(ctx, block, events)
@@ -94,6 +94,7 @@ func BenchmarkParseEvent(b *testing.B) {
 		ResultBlockResults: types.ResultBlockResults{
 			Height: 100,
 		},
+		AppVersion: 3,
 	}
 	raw := `{
 		"type": "coin_spent",

@@ -20,7 +20,7 @@ type ITx interface {
 	storage.Table[*Tx]
 
 	ByHash(ctx context.Context, hash []byte) (Tx, error)
-	IdByHash(ctx context.Context, hash []byte) (uint64, error)
+	IdAndTimeByHash(ctx context.Context, hash []byte) (uint64, time.Time, error)
 	Filter(ctx context.Context, fltrs TxFilter) ([]Tx, error)
 	ByIdWithRelations(ctx context.Context, id uint64) (Tx, error)
 	ByAddress(ctx context.Context, addressId uint64, fltrs TxFilter) ([]Tx, error)
@@ -74,7 +74,7 @@ type Tx struct {
 	Codespace    string            `bun:"codespace,type:text"        comment:"Codespace"                                    stats:"filterable"`
 	Hash         []byte            `bun:"hash"                       comment:"Transaction hash"`
 	Memo         string            `bun:"memo,type:text"             comment:"Note or comment to send with the transaction"`
-	MessageTypes types.MsgTypeBits `bun:"message_types,type:bit(74)" comment:"Bit mask with containing messages"            stats:"filterable"`
+	MessageTypes types.MsgTypeBits `bun:"message_types,type:bit(89)" comment:"Bit mask with containing messages"            stats:"filterable"`
 
 	Messages []Message `bun:"rel:has-many,join:id=tx_id"`
 	Events   []Event   `bun:"rel:has-many"`

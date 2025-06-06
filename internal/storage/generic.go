@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/celenium-io/celestia-indexer/pkg/types"
+	celestials "github.com/celenium-io/celestial-module/pkg/storage"
 	sdk "github.com/dipdup-net/indexer-sdk/pkg/storage"
 	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
@@ -39,10 +40,18 @@ var Models = []any{
 	&StakingLog{},
 	&Jail{},
 	&BlobLog{},
-	&Price{},
 	&Rollup{},
 	&RollupProvider{},
 	&Grant{},
+	&ApiKey{},
+	&celestials.Celestial{},
+	&celestials.CelestialState{},
+	&Proposal{},
+	&Vote{},
+	&IbcClient{},
+	&IbcConnection{},
+	&IbcChannel{},
+	&IbcTransfer{},
 }
 
 //go:generate mockgen -source=$GOFILE -destination=mock/$GOFILE -package=mock -typed
@@ -92,6 +101,12 @@ type Transaction interface {
 	SaveStakingLogs(ctx context.Context, logs ...StakingLog) error
 	SaveJails(ctx context.Context, jails ...Jail) error
 	SaveBlockSignatures(ctx context.Context, signs ...BlockSignature) error
+	SaveProposals(ctx context.Context, proposals ...*Proposal) (int64, error)
+	SaveVotes(ctx context.Context, votes ...*Vote) error
+	SaveIbcClients(ctx context.Context, clients ...*IbcClient) (int64, error)
+	SaveIbcConnections(ctx context.Context, connections ...*IbcConnection) error
+	SaveIbcChannels(ctx context.Context, channels ...*IbcChannel) error
+	SaveIbcTransfers(ctx context.Context, transfers ...*IbcTransfer) error
 	RetentionBlockSignatures(ctx context.Context, height types.Level) error
 	CancelUnbondings(ctx context.Context, cancellations ...Undelegation) error
 	RetentionCompletedUnbondings(ctx context.Context, blockTime time.Time) error
@@ -118,6 +133,12 @@ type Transaction interface {
 	RollbackRedelegations(ctx context.Context, height types.Level) (err error)
 	RollbackStakingLogs(ctx context.Context, height types.Level) ([]StakingLog, error)
 	RollbackJails(ctx context.Context, height types.Level) ([]Jail, error)
+	RollbackProposals(ctx context.Context, height types.Level) error
+	RollbackVotes(ctx context.Context, height types.Level) error
+	RollbackIbcClients(ctx context.Context, height types.Level) error
+	RollbackIbcConnections(ctx context.Context, height types.Level) error
+	RollbackIbcChannels(ctx context.Context, height types.Level) error
+	RollbackIbcTransfers(ctx context.Context, height types.Level) error
 	DeleteBalances(ctx context.Context, ids []uint64) error
 	DeleteProviders(ctx context.Context, rollupId uint64) error
 	DeleteRollup(ctx context.Context, rollupId uint64) error
@@ -131,8 +152,14 @@ type Transaction interface {
 	LastAddressAction(ctx context.Context, address []byte) (uint64, error)
 	GetProposerId(ctx context.Context, address string) (uint64, error)
 	Validator(ctx context.Context, id uint64) (val Validator, err error)
+	BondedValidators(ctx context.Context, limit int) ([]Validator, error)
 	Delegation(ctx context.Context, validatorId, addressId uint64) (val Delegation, err error)
+	AddressDelegations(ctx context.Context, addressId uint64) (val []Delegation, err error)
+	ActiveProposals(ctx context.Context) ([]Proposal, error)
+	ProposalVotes(ctx context.Context, proposalId uint64, limit, offset int) ([]Vote, error)
+	Proposal(ctx context.Context, id uint64) (Proposal, error)
 	RefreshLeaderboard(ctx context.Context) error
+	IbcConnection(ctx context.Context, id string) (IbcConnection, error)
 }
 
 const (

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 
 	"github.com/celenium-io/celestia-indexer/internal/storage"
+	celestialPg "github.com/celenium-io/celestial-module/pkg/storage/postgres"
 	"github.com/dipdup-net/go-lib/database"
 	"github.com/rs/zerolog/log"
 	"github.com/uptrace/bun"
@@ -236,6 +237,15 @@ func createIndices(ctx context.Context, conn *database.Bun) error {
 			Exec(ctx); err != nil {
 			return err
 		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Validator)(nil)).
+			Index("validator_jailed_idx").
+			ColumnExpr("(1)").
+			Where("NOT jailed").
+			Exec(ctx); err != nil {
+			return err
+		}
 
 		// Blob log
 		if _, err := tx.NewCreateIndex().
@@ -328,6 +338,14 @@ func createIndices(ctx context.Context, conn *database.Bun) error {
 			Exec(ctx); err != nil {
 			return err
 		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.BlockSignature)(nil)).
+			Index("block_signature_validator_id_idx").
+			Column("validator_id").
+			Exec(ctx); err != nil {
+			return err
+		}
 
 		// StakingLog
 		if _, err := tx.NewCreateIndex().
@@ -335,6 +353,14 @@ func createIndices(ctx context.Context, conn *database.Bun) error {
 			Model((*storage.StakingLog)(nil)).
 			Index("staking_log_validator_id_idx").
 			Column("validator_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.StakingLog)(nil)).
+			Index("staking_log_address_id_idx").
+			Column("address_id").
 			Exec(ctx); err != nil {
 			return err
 		}
@@ -505,6 +531,209 @@ func createIndices(ctx context.Context, conn *database.Bun) error {
 			Model((*storage.Grant)(nil)).
 			Index("grant_grantee_id_idx").
 			Column("grantee_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// Celestial
+		if err := celestialPg.CreateIndex(ctx, tx); err != nil {
+			return err
+		}
+
+		// Proposal
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Proposal)(nil)).
+			Index("proposal_height_idx").
+			Column("height").
+			Using("BRIN").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Proposal)(nil)).
+			Index("proposal_proposer_id_idx").
+			Column("proposer_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Proposal)(nil)).
+			Index("proposal_status_idx").
+			Column("status").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Proposal)(nil)).
+			Index("proposal_type_idx").
+			Column("type").
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// Vote
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Vote)(nil)).
+			Index("vote_height_idx").
+			Column("height").
+			Using("BRIN").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Vote)(nil)).
+			Index("vote_proposal_id_idx").
+			Column("proposal_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Vote)(nil)).
+			Index("vote_voter_id_idx").
+			Column("voter_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Vote)(nil)).
+			Index("vote_validator_id_idx").
+			Column("validator_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.Vote)(nil)).
+			Index("vote_option_idx").
+			Column("option").
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// IBC Client
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcClient)(nil)).
+			Index("ibc_client_height_idx").
+			Column("height").
+			Using("BRIN").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcClient)(nil)).
+			Index("ibc_client_updated_at_idx").
+			Column("updated_at").
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// IBC Connection
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcConnection)(nil)).
+			Index("ibc_connection_height_idx").
+			Column("height").
+			Using("BRIN").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcConnection)(nil)).
+			Index("ibc_connection_client_id_idx").
+			Column("client_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// IBC Channel
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcChannel)(nil)).
+			Index("ibc_channel_height_idx").
+			Column("height").
+			Using("BRIN").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcChannel)(nil)).
+			Index("ibc_channel_client_id_idx").
+			Column("client_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcChannel)(nil)).
+			Index("ibc_channel_connection_id_idx").
+			Column("connection_id").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcChannel)(nil)).
+			Index("ibc_channel_status_idx").
+			Column("status").
+			Exec(ctx); err != nil {
+			return err
+		}
+
+		// IBC Transfer
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcTransfer)(nil)).
+			Index("ibc_transfer_height_idx").
+			Column("height").
+			Using("BRIN").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcTransfer)(nil)).
+			Index("ibc_transfer_receiver_id_idx").
+			Column("receiver_id").
+			Where("receiver_id is not null").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcTransfer)(nil)).
+			Index("ibc_transfer_sender_id_idx").
+			Column("sender_id").
+			Where("sender_id is not null").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcTransfer)(nil)).
+			Index("ibc_transfer_channel_id_idx").
+			Column("channel_id").
+			Where("channel_id is not null").
+			Exec(ctx); err != nil {
+			return err
+		}
+		if _, err := tx.NewCreateIndex().
+			IfNotExists().
+			Model((*storage.IbcTransfer)(nil)).
+			Index("ibc_transfer_connection_id_idx").
+			Column("connection_id").
+			Where("connection_id is not null").
 			Exec(ctx); err != nil {
 			return err
 		}

@@ -121,10 +121,10 @@ func (s Stats) Change24hBlockStats(ctx context.Context) (response storage.Change
 		With("s", second).
 		TableExpr("f, s").
 		ColumnExpr(`
-			(f.tx_count - s.tx_count)/s.tx_count as tx_count_24h,
-			(f.bytes_in_block - s.bytes_in_block)/s.bytes_in_block as bytes_in_block_24h,
-			(f.blobs_size - s.blobs_size)/s.blobs_size as blobs_size_24h,
-			(f.fee - s.fee)/s.fee as fee_24h
+			case when s.tx_count > 0 then (f.tx_count - s.tx_count)/s.tx_count when f.tx_count > 0 then 1 else 0 end as tx_count_24h,
+			case when s.bytes_in_block > 0 then (f.bytes_in_block - s.bytes_in_block)/s.bytes_in_block when f.bytes_in_block > 0 then 1 else 0 end as bytes_in_block_24h,
+			case when s.blobs_size > 0 then (f.blobs_size - s.blobs_size)/s.blobs_size when f.blobs_size > 0 then 1 else 0 end as blobs_size_24h,
+			case when s.fee > 0 then (f.fee - s.fee)/s.fee when f.fee > 0 then 1 else 0 end as fee_24h
 		`).
 		Scan(ctx, &response)
 	return
@@ -193,7 +193,7 @@ func (s Stats) Series(ctx context.Context, timeframe storage.Timeframe, name str
 		query = query.Where("ts < ?", req.To)
 	}
 
-	err = query.Limit(200).Scan(ctx, &response)
+	err = query.Scan(ctx, &response)
 	return
 }
 
@@ -232,7 +232,7 @@ func (s Stats) NamespaceSeries(ctx context.Context, timeframe storage.Timeframe,
 		query = query.Where("ts < ?", req.To)
 	}
 
-	err = query.Limit(100).Scan(ctx, &response)
+	err = query.Scan(ctx, &response)
 	return
 }
 
@@ -325,7 +325,7 @@ func (s Stats) StakingSeries(ctx context.Context, timeframe storage.Timeframe, n
 		query = query.Where("time < ?", req.To)
 	}
 
-	err = query.Limit(100).Scan(ctx, &response)
+	err = query.Scan(ctx, &response)
 	return
 }
 
@@ -390,7 +390,7 @@ func (s Stats) RollupStats24h(ctx context.Context) (response []storage.RollupSta
 	joined := s.db.DB().NewSelect().
 		TableExpr("(?) as data", inner).
 		ColumnExpr("rollup_id, sum(data.size) as size, sum(data.fee) as fee, sum(data.blobs_count) as blobs_count").
-		Join("left join rollup_provider as rp on rp.address_id = data.signer_id AND (rp.namespace_id = data.namespace_id OR rp.namespace_id = 0)").
+		Join("left join rollup_provider as rp on (rp.address_id = data.signer_id OR rp.address_id = 0) AND (rp.namespace_id = data.namespace_id OR rp.namespace_id = 0)").
 		Group("rollup_id")
 
 	err = s.db.DB().NewSelect().
@@ -410,5 +410,32 @@ func (s Stats) MessagesCount24h(ctx context.Context) (response []storage.CountIt
 		Group("type").
 		Order("value desc").
 		Scan(ctx, &response)
+	return
+}
+
+func (s Stats) SizeGroups(ctx context.Context, timeFilter *time.Time) (groups []storage.SizeGroup, err error) {
+	rangeQuery := s.db.DB().NewRaw(`SELECT *
+      FROM ( VALUES 
+		  (1, 1000, '<1Kb'),
+		  (1001, 10000, '1-10Kb'),
+		  (10001, 100000, '10-100Kb'),
+		  (100001, 1000000, '100Kb-1Mb'),
+		  (1000001, 100000000, '>1Mb') 
+	  ) AS t(min_val, max_val, name)`)
+
+	if timeFilter == nil {
+		tf := time.Now().UTC().AddDate(0, 0, -1)
+		timeFilter = &tf
+	}
+
+	err = s.db.DB().NewSelect().
+		With("ranges", rangeQuery).
+		Table("ranges").
+		ColumnExpr("ranges.name as name, min(ranges.min_val) as min_val, count(blob_log.*), coalesce(sum(blob_log.size), 0) as size, coalesce(ceil(avg(blob_log.size)), 0) as avg_size").
+		Join("left join blob_log on (blob_log.size between ranges.min_val and ranges.max_val) and time >= ?", timeFilter).
+		Group("name").
+		Order("min_val").
+		Scan(ctx, &groups)
+
 	return
 }

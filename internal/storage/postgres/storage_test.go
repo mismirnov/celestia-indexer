@@ -39,7 +39,7 @@ func (s *StorageTestSuite) SetupSuite() {
 		Password: "password",
 		Database: "db_test",
 		Port:     5432,
-		Image:    "timescale/timescaledb-ha:pg15-latest",
+		Image:    "timescale/timescaledb-ha:pg15.8-ts2.17.0-all",
 	})
 	s.Require().NoError(err)
 	s.psqlContainer = psqlContainer
@@ -51,7 +51,7 @@ func (s *StorageTestSuite) SetupSuite() {
 		Password: s.psqlContainer.Config.Password,
 		Host:     s.psqlContainer.Config.Host,
 		Port:     s.psqlContainer.MappedPort().Int(),
-	}, "../../../database")
+	}, "../../../database", false)
 	s.Require().NoError(err)
 	s.storage = strg
 
@@ -328,35 +328,6 @@ func (s *StorageTestSuite) TestNotify() {
 			s.Require().NoError(err)
 		}
 	}
-}
-
-func (s *StorageTestSuite) TestPriceGet() {
-	for _, tf := range []string{
-		storage.PriceTimeframeDay,
-		storage.PriceTimeframeHour,
-		storage.PriceTimeframeMinute,
-	} {
-
-		ctx, ctxCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer ctxCancel()
-
-		candles, err := s.storage.Price.Get(ctx, tf, time.Time{}, time.Time{}, 1)
-		s.Require().NoError(err)
-		s.Require().Len(candles, 1)
-	}
-}
-
-func (s *StorageTestSuite) TestPriceLast() {
-	ctx, ctxCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer ctxCancel()
-
-	candle, err := s.storage.Price.Last(ctx)
-	s.Require().NoError(err)
-
-	s.Require().EqualValues("1.789", candle.Open.String())
-	s.Require().EqualValues("2.0001", candle.High.String())
-	s.Require().EqualValues("0.9999", candle.Low.String())
-	s.Require().EqualValues("1.345", candle.Close.String())
 }
 
 func TestSuiteStorage_Run(t *testing.T) {

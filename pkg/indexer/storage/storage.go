@@ -5,7 +5,6 @@ package storage
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/celenium-io/celestia-indexer/pkg/indexer/config"
@@ -72,7 +71,7 @@ func NewModule(
 		indexerName:             cfg.Name,
 	}
 
-	m.CreateInputWithCapacity(InputName, 16)
+	m.CreateInputWithCapacity(InputName, 128)
 	m.CreateOutput(StopOutput)
 
 	return m
@@ -311,7 +310,8 @@ func (module *Module) processBlockInTransaction(ctx context.Context, tx storage.
 		return state, err
 	}
 
-	if err := module.saveMessages(ctx, tx, messages, addrToId); err != nil {
+	ibcClientsCount, err := module.saveMessages(ctx, tx, messages, addrToId)
+	if err != nil {
 		return state, err
 	}
 
@@ -329,7 +329,12 @@ func (module *Module) processBlockInTransaction(ctx context.Context, tx storage.
 		return state, err
 	}
 
-	updateState(block, totalAccounts, totalNamespaces, totalValidators, totalVotingPower, &state)
+	totalProposals, err := module.saveProposals(ctx, tx, dCtx.Block.Height, dCtx.GetProposals(), dCtx.Votes, addrToId)
+	if err != nil {
+		return state, err
+	}
+
+	updateState(block, totalAccounts, totalNamespaces, totalProposals, ibcClientsCount, totalValidators, totalVotingPower, &state)
 	err = tx.Update(ctx, &state)
 	return state, err
 }
@@ -348,8 +353,11 @@ func (module *Module) notify(ctx context.Context, state storage.State, block sto
 		return err
 	}
 
-	blockId := strconv.FormatUint(block.Id, 10)
-	if err := module.notificator.Notify(ctx, storage.ChannelBlock, blockId); err != nil {
+	rawBlock, err := jsoniter.MarshalToString(block)
+	if err != nil {
+		return err
+	}
+	if err := module.notificator.Notify(ctx, storage.ChannelBlock, rawBlock); err != nil {
 		return err
 	}
 

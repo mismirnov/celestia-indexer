@@ -7,8 +7,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/dipdup-net/indexer-sdk/pkg/modules/stopper"
-	"github.com/tendermint/tendermint/rpc/client/http"
 
 	"github.com/dipdup-net/indexer-sdk/pkg/modules"
 
@@ -18,6 +18,7 @@ import (
 	"github.com/celenium-io/celestia-indexer/pkg/indexer/rollback"
 	"github.com/celenium-io/celestia-indexer/pkg/indexer/storage"
 	"github.com/celenium-io/celestia-indexer/pkg/node"
+	"github.com/celenium-io/celestia-indexer/pkg/node/api"
 	"github.com/celenium-io/celestia-indexer/pkg/node/rpc"
 	"github.com/pkg/errors"
 
@@ -43,7 +44,7 @@ type Indexer struct {
 }
 
 func New(ctx context.Context, cfg config.Config, stopperModule modules.Module) (Indexer, error) {
-	pg, err := postgres.Create(ctx, cfg.Database, cfg.Indexer.ScriptsDir)
+	pg, err := postgres.Create(ctx, cfg.Database, cfg.Indexer.ScriptsDir, true)
 	if err != nil {
 		return Indexer{}, errors.Wrap(err, "while creating pg context")
 	}
@@ -134,18 +135,19 @@ func createReceiver(ctx context.Context, cfg config.Config, pg postgres.Storage)
 		return rpc.API{}, nil, errors.Wrap(err, "while loading state")
 	}
 
-	api := rpc.NewAPI(cfg.DataSources["node_rpc"])
+	nodeRpc := rpc.NewAPI(cfg.DataSources["node_rpc"])
+	nodeApi := api.NewAPI(cfg.DataSources["node_api"])
 
 	var ws *http.HTTP
 	if source, ok := cfg.DataSources["node_ws"]; ok && source.URL != "" {
 		ws, err = http.New(source.URL, "/websocket")
 		if err != nil {
-			return rpc.API{}, nil, errors.Wrap(err, "create websocket")
+			return nodeRpc, nil, errors.Wrap(err, "create websocket")
 		}
 	}
 
-	receiverModule := receiver.NewModule(cfg.Indexer, &api, ws, state)
-	return api, &receiverModule, nil
+	receiverModule := receiver.NewModule(cfg.Indexer, &nodeRpc, &nodeApi, ws, state)
+	return nodeRpc, &receiverModule, nil
 }
 
 func createRollback(receiverModule modules.Module, pg postgres.Storage, api node.Api, cfg config.Indexer) (*rollback.Module, error) {

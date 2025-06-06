@@ -137,6 +137,12 @@ const (
 	MsgUpgradeClient MsgType = "MsgUpgradeClient"
 	// MsgSubmitMisbehaviour is a MsgType of type MsgSubmitMisbehaviour.
 	MsgSubmitMisbehaviour MsgType = "MsgSubmitMisbehaviour"
+	// MsgRecoverClient is a MsgType of type MsgRecoverClient.
+	MsgRecoverClient MsgType = "MsgRecoverClient"
+	// MsgIBCSoftwareUpgrade is a MsgType of type MsgIBCSoftwareUpgrade.
+	MsgIBCSoftwareUpgrade MsgType = "MsgIBCSoftwareUpgrade"
+	// MsgUpdateParams is a MsgType of type MsgUpdateParams.
+	MsgUpdateParams MsgType = "MsgUpdateParams"
 	// MsgConnectionOpenInit is a MsgType of type MsgConnectionOpenInit.
 	MsgConnectionOpenInit MsgType = "MsgConnectionOpenInit"
 	// MsgConnectionOpenTry is a MsgType of type MsgConnectionOpenTry.
@@ -165,6 +171,30 @@ const (
 	MsgTimeoutOnClose MsgType = "MsgTimeoutOnClose"
 	// MsgAcknowledgement is a MsgType of type MsgAcknowledgement.
 	MsgAcknowledgement MsgType = "MsgAcknowledgement"
+	// MsgSignalVersion is a MsgType of type MsgSignalVersion.
+	MsgSignalVersion MsgType = "MsgSignalVersion"
+	// MsgTryUpgrade is a MsgType of type MsgTryUpgrade.
+	MsgTryUpgrade MsgType = "MsgTryUpgrade"
+	// MsgCreateMailbox is a MsgType of type MsgCreateMailbox.
+	MsgCreateMailbox MsgType = "MsgCreateMailbox"
+	// MsgProcessMessage is a MsgType of type MsgProcessMessage.
+	MsgProcessMessage MsgType = "MsgProcessMessage"
+	// MsgSetMailbox is a MsgType of type MsgSetMailbox.
+	MsgSetMailbox MsgType = "MsgSetMailbox"
+	// MsgCreateCollateralToken is a MsgType of type MsgCreateCollateralToken.
+	MsgCreateCollateralToken MsgType = "MsgCreateCollateralToken"
+	// MsgCreateSyntheticToken is a MsgType of type MsgCreateSyntheticToken.
+	MsgCreateSyntheticToken MsgType = "MsgCreateSyntheticToken"
+	// MsgSetToken is a MsgType of type MsgSetToken.
+	MsgSetToken MsgType = "MsgSetToken"
+	// MsgEnrollRemoteRouter is a MsgType of type MsgEnrollRemoteRouter.
+	MsgEnrollRemoteRouter MsgType = "MsgEnrollRemoteRouter"
+	// MsgUnrollRemoteRouter is a MsgType of type MsgUnrollRemoteRouter.
+	MsgUnrollRemoteRouter MsgType = "MsgUnrollRemoteRouter"
+	// MsgRemoteTransfer is a MsgType of type MsgRemoteTransfer.
+	MsgRemoteTransfer MsgType = "MsgRemoteTransfer"
+	// MsgUpdateMinfeeParams is a MsgType of type MsgUpdateMinfeeParams.
+	MsgUpdateMinfeeParams MsgType = "MsgUpdateMinfeeParams"
 )
 
 var ErrInvalidMsgType = fmt.Errorf("not a valid MsgType, try [%s]", strings.Join(_MsgTypeNames, ", "))
@@ -230,6 +260,9 @@ var _MsgTypeNames = []string{
 	string(MsgUpdateClient),
 	string(MsgUpgradeClient),
 	string(MsgSubmitMisbehaviour),
+	string(MsgRecoverClient),
+	string(MsgIBCSoftwareUpgrade),
+	string(MsgUpdateParams),
 	string(MsgConnectionOpenInit),
 	string(MsgConnectionOpenTry),
 	string(MsgConnectionOpenAck),
@@ -244,6 +277,18 @@ var _MsgTypeNames = []string{
 	string(MsgTimeout),
 	string(MsgTimeoutOnClose),
 	string(MsgAcknowledgement),
+	string(MsgSignalVersion),
+	string(MsgTryUpgrade),
+	string(MsgCreateMailbox),
+	string(MsgProcessMessage),
+	string(MsgSetMailbox),
+	string(MsgCreateCollateralToken),
+	string(MsgCreateSyntheticToken),
+	string(MsgSetToken),
+	string(MsgEnrollRemoteRouter),
+	string(MsgUnrollRemoteRouter),
+	string(MsgRemoteTransfer),
+	string(MsgUpdateMinfeeParams),
 }
 
 // MsgTypeNames returns a list of possible string values of MsgType.
@@ -316,6 +361,9 @@ func MsgTypeValues() []MsgType {
 		MsgUpdateClient,
 		MsgUpgradeClient,
 		MsgSubmitMisbehaviour,
+		MsgRecoverClient,
+		MsgIBCSoftwareUpgrade,
+		MsgUpdateParams,
 		MsgConnectionOpenInit,
 		MsgConnectionOpenTry,
 		MsgConnectionOpenAck,
@@ -330,6 +378,18 @@ func MsgTypeValues() []MsgType {
 		MsgTimeout,
 		MsgTimeoutOnClose,
 		MsgAcknowledgement,
+		MsgSignalVersion,
+		MsgTryUpgrade,
+		MsgCreateMailbox,
+		MsgProcessMessage,
+		MsgSetMailbox,
+		MsgCreateCollateralToken,
+		MsgCreateSyntheticToken,
+		MsgSetToken,
+		MsgEnrollRemoteRouter,
+		MsgUnrollRemoteRouter,
+		MsgRemoteTransfer,
+		MsgUpdateMinfeeParams,
 	}
 }
 
@@ -406,6 +466,9 @@ var _MsgTypeValue = map[string]MsgType{
 	"MsgUpdateClient":                    MsgUpdateClient,
 	"MsgUpgradeClient":                   MsgUpgradeClient,
 	"MsgSubmitMisbehaviour":              MsgSubmitMisbehaviour,
+	"MsgRecoverClient":                   MsgRecoverClient,
+	"MsgIBCSoftwareUpgrade":              MsgIBCSoftwareUpgrade,
+	"MsgUpdateParams":                    MsgUpdateParams,
 	"MsgConnectionOpenInit":              MsgConnectionOpenInit,
 	"MsgConnectionOpenTry":               MsgConnectionOpenTry,
 	"MsgConnectionOpenAck":               MsgConnectionOpenAck,
@@ -420,6 +483,18 @@ var _MsgTypeValue = map[string]MsgType{
 	"MsgTimeout":                         MsgTimeout,
 	"MsgTimeoutOnClose":                  MsgTimeoutOnClose,
 	"MsgAcknowledgement":                 MsgAcknowledgement,
+	"MsgSignalVersion":                   MsgSignalVersion,
+	"MsgTryUpgrade":                      MsgTryUpgrade,
+	"MsgCreateMailbox":                   MsgCreateMailbox,
+	"MsgProcessMessage":                  MsgProcessMessage,
+	"MsgSetMailbox":                      MsgSetMailbox,
+	"MsgCreateCollateralToken":           MsgCreateCollateralToken,
+	"MsgCreateSyntheticToken":            MsgCreateSyntheticToken,
+	"MsgSetToken":                        MsgSetToken,
+	"MsgEnrollRemoteRouter":              MsgEnrollRemoteRouter,
+	"MsgUnrollRemoteRouter":              MsgUnrollRemoteRouter,
+	"MsgRemoteTransfer":                  MsgRemoteTransfer,
+	"MsgUpdateMinfeeParams":              MsgUpdateMinfeeParams,
 }
 
 // ParseMsgType attempts to convert a string to a MsgType.

@@ -10,13 +10,18 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/celestiaorg/celestia-app/v4/pkg/appconsts"
+	"github.com/celestiaorg/celestia-app/v4/pkg/da"
+	"github.com/celestiaorg/go-square/v2/share"
+
 	"github.com/celenium-io/celestia-indexer/pkg/types"
-	sdk "github.com/dipdup-net/indexer-sdk/pkg/storage"
+	"github.com/celestiaorg/go-square/v2"
 
 	"github.com/celenium-io/celestia-indexer/cmd/api/handler/responses"
 	"github.com/celenium-io/celestia-indexer/internal/storage"
 	testsuite "github.com/celenium-io/celestia-indexer/internal/test_suite"
 	"github.com/celenium-io/celestia-indexer/pkg/node"
+	"github.com/celestiaorg/celestia-app/v4/pkg/proof"
 	"github.com/labstack/echo/v4"
 )
 
@@ -27,6 +32,7 @@ type NamespaceHandler struct {
 	address     storage.IAddress
 	blob        node.DalApi
 	state       storage.IState
+	node        node.Api
 	indexerName string
 }
 
@@ -38,6 +44,7 @@ func NewNamespaceHandler(
 	state storage.IState,
 	indexerName string,
 	blob node.DalApi,
+	node node.Api,
 ) *NamespaceHandler {
 	return &NamespaceHandler{
 		namespace:   namespace,
@@ -47,6 +54,7 @@ func NewNamespaceHandler(
 		blob:        blob,
 		state:       state,
 		indexerName: indexerName,
+		node:        node,
 	}
 }
 
@@ -164,6 +172,22 @@ func (handler *NamespaceHandler) GetWithVersion(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, responses.NewNamespace(namespace))
+}
+
+type namespaceList struct {
+	Limit  int    `query:"limit"   validate:"omitempty,min=1,max=100"`
+	Offset int    `query:"offset"  validate:"omitempty,min=0"`
+	Sort   string `query:"sort"    validate:"omitempty,oneof=asc desc"`
+	SortBy string `query:"sort_by" validate:"omitempty,oneof=time pfb_count size"`
+}
+
+func (p *namespaceList) SetDefault() {
+	if p.Limit == 0 {
+		p.Limit = 10
+	}
+	if p.Sort == "" {
+		p.Sort = desc
+	}
 }
 
 // List godoc
@@ -293,61 +317,6 @@ func (handler *NamespaceHandler) GetMessages(c echo.Context) error {
 	return returnArray(c, response)
 }
 
-type getActiveRequest struct {
-	Sort string `query:"sort" validate:"omitempty,oneof=time pfb_count size"`
-}
-
-// GetActive godoc
-//
-//	@Summary		Get last used namespace
-//	@Description	Get last used namespace
-//	@Tags			namespace
-//	@ID				get-namespace-active
-//	@Param			sort	query	string	false	"Sort field. Default: time"	Enums(time,pfb_count,size)
-//	@Produce		json
-//	@Success		200	{array}		responses.Namespace
-//	@Failure		500	{object}	Error
-//	@Router			/namespace/active [get]
-func (handler *NamespaceHandler) GetActive(c echo.Context) error {
-	req, err := bindAndValidate[getActiveRequest](c)
-	if err != nil {
-		return badRequestError(c, err)
-	}
-
-	if req.Sort == "" {
-		req.Sort = "time"
-	}
-
-	active, err := handler.namespace.ListWithSort(c.Request().Context(), req.Sort, sdk.SortOrderDesc, 5, 0)
-	if err != nil {
-		return handleError(c, err, handler.namespace)
-	}
-
-	response := make([]responses.Namespace, len(active))
-	for i := range response {
-		response[i] = responses.NewNamespace(active[i])
-	}
-	return returnArray(c, response)
-}
-
-// Count godoc
-//
-//	@Summary		Get count of namespaces in network
-//	@Description	Get count of namespaces in network
-//	@Tags			namespace
-//	@ID				get-namespace-count
-//	@Produce		json
-//	@Success		200	{integer}	uint64
-//	@Failure		500	{object}	Error
-//	@Router			/namespace/count [get]
-func (handler *NamespaceHandler) Count(c echo.Context) error {
-	state, err := handler.state.ByName(c.Request().Context(), handler.indexerName)
-	if err != nil {
-		return handleError(c, err, handler.namespace)
-	}
-	return c.JSON(http.StatusOK, state.TotalNamespaces)
-}
-
 type listBlobsRequest struct {
 	Limit      int         `query:"limit"      validate:"omitempty,min=1,max=100"`
 	Offset     int         `query:"offset"     validate:"omitempty,min=0"`
@@ -468,20 +437,18 @@ func (handler *NamespaceHandler) Blobs(c echo.Context) error {
 }
 
 type postBlobRequest struct {
-	Hash       string      `json:"hash"       validate:"required,namespace"`
-	Height     types.Level `json:"height"     validate:"required,min=1"`
-	Commitment string      `json:"commitment" validate:"required,base64"`
+	Hash       string      `example:"AAAAAAAAAAAAAAAAAAAAAAAAAAAAs2bWWU6FOB0="     json:"hash"       validate:"required,namespace"`
+	Height     types.Level `example:"123456"                                       json:"height"     validate:"required,min=1"`
+	Commitment string      `example:"vbGakK59+Non81TE3ULg5Ve5ufT9SFm/bCyY+WLR3gg=" json:"commitment" validate:"required,base64"`
 }
 
 // Blob godoc
 //
 //	@Summary					Get namespace blob by commitment on height
-//	@Description				Returns blob
+//	@Description				Returns blob.
 //	@Tags						namespace
 //	@ID							get-blob
-//	@Param						hash		body	string	true	"Base64-encoded namespace id and version"
-//	@Param						height		body	integer	true	"Block heigth"	minimum(1)
-//	@Param						commitment	body	string	true	"Blob commitment"
+//	@Param						request	body postBlobRequest	true "Request body containing height, commitment and namespace hash"
 //	@Accept						json
 //	@Produce					json
 //	@Success					200	{object}	responses.Blob
@@ -517,14 +484,17 @@ func (handler *NamespaceHandler) Blob(c echo.Context) error {
 //	@Description	Returns blob metadata
 //	@Tags			namespace
 //	@ID				get-blob-metadata
-//	@Param			hash		body	string	true	"Base64-encoded namespace id and version"
-//	@Param			height		body	integer	true	"Block heigth"	minimum(1)
-//	@Param			commitment	body	string	true	"Blob commitment"
+//	@Param			request	body postBlobRequest	true "Request body containing height, commitment and namespace hash"
 //	@Accept			json
 //	@Produce		json
 //	@Success		200	{object}	responses.BlobLog
 //	@Failure		400	{object}	Error
 //	@Router			/blob/metadata [post]
+//
+//	@securityDefinitions.apikey	ApiKeyAuth
+//	@in							header
+//	@name						apikey
+//	@description				To authorize your requests you have to select the required tariff on our site. Then you receive api key to authorize. Api key should be passed via request header `apikey`.
 func (handler *NamespaceHandler) BlobMetadata(c echo.Context) error {
 	req, err := bindAndValidate[postBlobRequest](c)
 	if err != nil {
@@ -657,6 +627,7 @@ func (handler *NamespaceHandler) GetBlobLogs(c echo.Context) error {
 		Joins:      *req.Joins,
 		Signers:    ids,
 		Cursor:     req.Cursor,
+		To:         ns.LastMessageTime.Add(time.Second),
 	}
 
 	if req.From > 0 {
@@ -731,4 +702,69 @@ func (handler *NamespaceHandler) Rollups(c echo.Context) error {
 	}
 
 	return returnArray(c, response)
+}
+
+// BlobProofs godoc
+//
+//	@Summary		Get blob inclusion proofs
+//	@Description	Returns blob inclusion proofs
+//	@Tags			namespace
+//	@ID				get-blob-proof
+//	@Param			request	body postBlobRequest	true "Request body containing height, commitment and namespace hash"
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	responses.BlobLog
+//	@Failure		400	{object}	Error
+//	@Router			/blob/proofs [get]
+func (handler *NamespaceHandler) BlobProofs(c echo.Context) error {
+	req, err := bindAndValidate[postBlobRequest](c)
+	if err != nil {
+		return badRequestError(c, err)
+	}
+
+	block, err := handler.node.Block(c.Request().Context(), req.Height)
+	if err != nil {
+		return handleError(c, err, handler.namespace)
+	}
+
+	dataSquare, err := square.Construct(
+		block.Block.Data.Txs.ToSliceOfBytes(),
+		appconsts.SquareSizeUpperBound,
+		appconsts.SubtreeRootThreshold,
+	)
+
+	if err != nil {
+		return internalServerError(c, err)
+	}
+
+	startBlobIndex, endBlobIndex, err := responses.GetBlobShareIndexes(dataSquare, req.Hash, req.Commitment)
+	if err != nil {
+		return internalServerError(c, err)
+	}
+	blobSharesRange := share.Range{
+		Start: startBlobIndex,
+		End:   endBlobIndex,
+	}
+
+	eds, err := da.ExtendShares(share.ToBytes(dataSquare))
+	if err != nil {
+		return internalServerError(c, err)
+	}
+
+	namespaceBytes, err := base64.StdEncoding.DecodeString(req.Hash)
+	if err != nil {
+		return internalServerError(c, err)
+	}
+
+	namespace, err := share.NewNamespaceFromBytes(namespaceBytes)
+	if err != nil {
+		return internalServerError(c, err)
+	}
+
+	proofs, err := proof.NewShareInclusionProofFromEDS(eds, namespace, blobSharesRange)
+	if err != nil {
+		return handleError(c, err, handler.namespace)
+	}
+
+	return c.JSON(http.StatusOK, responses.NewProofs(proofs.ShareProofs))
 }

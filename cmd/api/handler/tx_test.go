@@ -128,7 +128,7 @@ func (s *TxTestSuite) TestGet() {
 	s.Require().Equal("sdk", tx.Codespace)
 	s.Require().Equal(types.StatusSuccess, tx.Status)
 	s.Require().Len(tx.Signers, 1)
-	s.Require().Equal(testAddress, tx.Signers[0])
+	s.Require().Equal(testAddress, tx.Signers[0].Hash)
 }
 
 func (s *TxTestSuite) TestGetInvalidTx() {
@@ -191,7 +191,7 @@ func (s *TxTestSuite) TestList() {
 	s.Require().Equal("sdk", tx.Codespace)
 	s.Require().Equal(types.StatusSuccess, tx.Status)
 	s.Require().Len(tx.Signers, 1)
-	s.Require().Equal(testAddress, tx.Signers[0])
+	s.Require().Equal(testAddress, tx.Signers[0].Hash)
 }
 
 func (s *TxTestSuite) TestListValidationStatusError() {
@@ -283,7 +283,7 @@ func (s *TxTestSuite) TestListTime() {
 	s.Require().Equal("sdk", tx.Codespace)
 	s.Require().Equal(types.StatusSuccess, tx.Status)
 	s.Require().Len(tx.Signers, 1)
-	s.Require().Equal(testAddress, tx.Signers[0])
+	s.Require().Equal(testAddress, tx.Signers[0].Hash)
 }
 
 func (s *TxTestSuite) TestListHeight() {
@@ -342,7 +342,7 @@ func (s *TxTestSuite) TestListHeight() {
 
 	s.Require().Len(tx.Messages, 1)
 	s.Require().Len(tx.Signers, 1)
-	s.Require().Equal(testAddress, tx.Signers[0])
+	s.Require().Equal(testAddress, tx.Signers[0].Hash)
 }
 
 func (s *TxTestSuite) TestListExcludedMessages() {
@@ -401,7 +401,7 @@ func (s *TxTestSuite) TestListExcludedMessages() {
 
 	s.Require().Len(tx.Messages, 1)
 	s.Require().Len(tx.Signers, 1)
-	s.Require().Equal(testAddress, tx.Signers[0])
+	s.Require().Equal(testAddress, tx.Signers[0].Hash)
 }
 
 func (s *TxTestSuite) TestGetEvents() {
@@ -417,8 +417,8 @@ func (s *TxTestSuite) TestGetEvents() {
 	c.SetParamValues(testTxHash)
 
 	s.tx.EXPECT().
-		ByHash(gomock.Any(), testTxHashBytes).
-		Return(testTx, nil)
+		IdAndTimeByHash(gomock.Any(), testTxHashBytes).
+		Return(testTx.Id, testTx.Time, nil)
 
 	s.events.EXPECT().
 		ByTxId(gomock.Any(), uint64(1), gomock.Any()).
@@ -464,8 +464,8 @@ func (s *TxTestSuite) TestGetMessage() {
 	c.SetParamValues(testTxHash)
 
 	s.tx.EXPECT().
-		IdByHash(gomock.Any(), testTxHashBytes).
-		Return(testTx.Id, nil)
+		IdAndTimeByHash(gomock.Any(), testTxHashBytes).
+		Return(testTx.Id, testTx.Time, nil)
 
 	s.messages.EXPECT().
 		ByTxId(gomock.Any(), uint64(1), 2, 0).
@@ -560,8 +560,8 @@ func (s *TxTestSuite) TestBlobs() {
 	c.SetParamValues(testTxHash)
 
 	s.tx.EXPECT().
-		IdByHash(gomock.Any(), testTxHashBytes).
-		Return(testTx.Id, nil).
+		IdAndTimeByHash(gomock.Any(), testTxHashBytes).
+		Return(testTx.Id, testTx.Time, nil).
 		Times(1)
 
 	s.blobLogs.EXPECT().
@@ -613,8 +613,8 @@ func (s *TxTestSuite) TestBlobsCount() {
 	c.SetParamValues(testTxHash)
 
 	s.tx.EXPECT().
-		IdByHash(gomock.Any(), testTxHashBytes).
-		Return(testTx.Id, nil).
+		IdAndTimeByHash(gomock.Any(), testTxHashBytes).
+		Return(testTx.Id, testTx.Time, nil).
 		Times(1)
 
 	s.blobLogs.EXPECT().

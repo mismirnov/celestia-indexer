@@ -22,7 +22,7 @@ type ConstantTestSuite struct {
 	suite.Suite
 	constants     *mock.MockIConstant
 	denomMetadata *mock.MockIDenomMetadata
-	address       *mock.MockIAddress
+	rollup        *mock.MockIRollup
 	echo          *echo.Echo
 	handler       *ConstantHandler
 	ctrl          *gomock.Controller
@@ -35,7 +35,8 @@ func (s *ConstantTestSuite) SetupSuite() {
 	s.ctrl = gomock.NewController(s.T())
 	s.constants = mock.NewMockIConstant(s.ctrl)
 	s.denomMetadata = mock.NewMockIDenomMetadata(s.ctrl)
-	s.address = mock.NewMockIAddress(s.ctrl)
+	s.rollup = mock.NewMockIRollup(s.ctrl)
+	s.handler = NewConstantHandler(s.constants, s.denomMetadata, s.rollup)
 }
 
 // TearDownSuite -
@@ -54,6 +55,11 @@ func (s *ConstantTestSuite) TestEnums() {
 	c := s.echo.NewContext(req, rec)
 	c.SetPath("/enums")
 
+	s.rollup.EXPECT().
+		Tags(gomock.Any()).
+		Return([]string{"ai", "zk"}, nil).
+		Times(1)
+
 	s.Require().NoError(s.handler.Enums(c))
 	s.Require().Equal(http.StatusOK, rec.Code)
 
@@ -61,6 +67,11 @@ func (s *ConstantTestSuite) TestEnums() {
 	err := json.NewDecoder(rec.Body).Decode(&enums)
 	s.Require().NoError(err)
 	s.Require().Len(enums.EventType, 59)
-	s.Require().Len(enums.MessageType, 74)
+	s.Require().Len(enums.MessageType, 89)
 	s.Require().Len(enums.Status, 2)
+	s.Require().Len(enums.Categories, 5)
+	s.Require().Len(enums.Tags, 2)
+	s.Require().Len(enums.CelestialsStatuses, 3)
+	s.Require().Len(enums.ProposalType, 4)
+	s.Require().Len(enums.ProposalStatus, 5)
 }

@@ -6,6 +6,7 @@ package responses
 import (
 	"github.com/celenium-io/celestia-indexer/internal/storage"
 	"github.com/celenium-io/celestia-indexer/internal/storage/types"
+	celestials "github.com/celenium-io/celestial-module/pkg/storage"
 	"github.com/goccy/go-json"
 	"github.com/shopspring/decimal"
 )
@@ -66,15 +67,33 @@ func NewConstants(consts []storage.Constant, denomMetadata []storage.DenomMetada
 }
 
 type Enums struct {
-	Status      []string `json:"status"`
-	MessageType []string `json:"message_type"`
-	EventType   []string `json:"event_type"`
+	Status             []string `json:"status"`
+	MessageType        []string `json:"message_type"`
+	EventType          []string `json:"event_type"`
+	Categories         []string `json:"categories"`
+	RollupTypes        []string `json:"rollup_type"`
+	Tags               []string `json:"tags"`
+	CelestialsStatuses []string `json:"celestials_statuses"`
+	ProposalStatus     []string `json:"proposal_status"`
+	ProposalType       []string `json:"proposal_type"`
+	VoteType           []string `json:"vote_type"`
+	VoteOption         []string `json:"vote_option"`
+	IbcChannelStatus   []string `json:"ibc_channel_status"`
 }
 
-func NewEnums() Enums {
+func NewEnums(tags []string) Enums {
 	return Enums{
-		Status:      types.StatusNames(),
-		MessageType: types.MsgTypeNames(),
-		EventType:   types.EventTypeNames(),
+		Status:             types.StatusNames(),
+		MessageType:        types.MsgTypeNames(),
+		EventType:          types.EventTypeNames(),
+		Categories:         types.RollupCategoryNames(),
+		RollupTypes:        types.RollupTypeNames(),
+		Tags:               tags,
+		CelestialsStatuses: celestials.StatusNames(),
+		ProposalStatus:     types.ProposalStatusNames(),
+		ProposalType:       types.ProposalTypeNames(),
+		VoteType:           types.VoterTypeNames(),
+		VoteOption:         types.VoteOptionNames(),
+		IbcChannelStatus:   types.IbcChannelStatusNames(),
 	}
 }

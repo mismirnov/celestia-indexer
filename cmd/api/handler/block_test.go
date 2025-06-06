@@ -17,7 +17,7 @@ import (
 
 	nodeMock "github.com/celenium-io/celestia-indexer/pkg/node/mock"
 	pkgTypes "github.com/celenium-io/celestia-indexer/pkg/types"
-	tmTypes "github.com/tendermint/tendermint/types"
+	tmTypes "github.com/cometbft/cometbft/types"
 
 	"github.com/celenium-io/celestia-indexer/cmd/api/handler/responses"
 	"github.com/celenium-io/celestia-indexer/internal/storage"
@@ -420,9 +420,12 @@ func (s *BlockTestSuite) TestGetBlobsCount() {
 	c.SetParamNames("height")
 	c.SetParamValues("100")
 
-	s.blobLogs.EXPECT().
-		CountByHeight(gomock.Any(), pkgTypes.Level(100)).
-		Return(12, nil)
+	s.blockStats.EXPECT().
+		ByHeight(gomock.Any(), pkgTypes.Level(100)).
+		Return(storage.BlockStats{
+			BlobsCount: 12,
+		}, nil).
+		Times(1)
 
 	s.Require().NoError(s.handler.BlobsCount(c))
 	s.Require().Equal(http.StatusOK, rec.Code)

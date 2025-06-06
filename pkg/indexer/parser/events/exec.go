@@ -15,13 +15,17 @@ func handleExec(ctx *context.Context, events []storage.Event, msg *storage.Messa
 		return errors.New("nil event index")
 	}
 	if msg == nil {
-		return errors.New("nil message in events hanler")
+		return errors.New("nil message in events handler")
 	}
 	if action := decoder.StringFromMap(events[*idx].Data, "action"); action != "/cosmos.authz.v1beta1.MsgExec" {
 		return errors.Errorf("unexpected event action %s for message type %s", action, msg.Type.String())
 	}
 	*idx += 1
 
+	return processExec(ctx, events, msg, idx)
+}
+
+func processExec(ctx *context.Context, events []storage.Event, msg *storage.Message, idx *int) error {
 	for i := range msg.InternalMsgs {
 		switch msg.InternalMsgs[i] {
 		case "/cosmos.staking.v1beta1.MsgCancelUnbondingDelegation":
@@ -63,7 +67,7 @@ func handleExec(ctx *context.Context, events []storage.Event, msg *storage.Messa
 				return err
 			}
 		case "/cosmos.slashing.v1beta1.MsgUnjail":
-			if err := processUnjail(ctx, events, idx); err != nil {
+			if err := processUnjail(ctx, events, msg, idx); err != nil {
 				return err
 			}
 		default:

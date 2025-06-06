@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/celenium-io/celestia-indexer/internal/currency"
 	"github.com/celenium-io/celestia-indexer/internal/storage"
 	storageTypes "github.com/celenium-io/celestia-indexer/internal/storage/types"
 	"github.com/celenium-io/celestia-indexer/pkg/indexer/decode"
@@ -27,6 +28,8 @@ type parsedData struct {
 	constants     []storage.Constant
 	denomMetadata []storage.DenomMetadata
 	vestings      []*storage.VestingAccount
+
+	bondedTokensPool *storage.Address
 }
 
 func newParsedData() parsedData {
@@ -41,7 +44,7 @@ func newParsedData() parsedData {
 	}
 }
 
-func (module *Module) parse(genesis types.Genesis) (parsedData, error) {
+func (module *Module) parse(genesis types.GenesisOutput) (parsedData, error) {
 	data := newParsedData()
 	block := storage.Block{
 		Time:    genesis.GenesisTime,
@@ -63,6 +66,10 @@ func (module *Module) parse(genesis types.Genesis) (parsedData, error) {
 
 	decodeCtx := context.NewContext()
 	decodeCtx.Block = &block
+
+	if err := module.parseAccounts(genesis.ModuleAccs, block, &data); err != nil {
+		return data, errors.Wrap(err, "parse genesis accounts")
+	}
 
 	for index, genTx := range genesis.AppState.Genutil.GenTxs {
 		txDecoded, err := decode.JsonTx(genTx)
@@ -109,6 +116,10 @@ func (module *Module) parse(genesis types.Genesis) (parsedData, error) {
 		block.Txs = append(block.Txs, tx)
 	}
 
+	for _, addr := range decodeCtx.GetAddresses() {
+		data.addresses[addr.String()] = addr
+	}
+
 	module.parseDenomMetadata(genesis.AppState.Bank.DenomMetadata, &data)
 	module.parseConstants(genesis.AppState, genesis.ConsensusParams, &data)
 
@@ -126,6 +137,12 @@ func (module *Module) parse(genesis types.Genesis) (parsedData, error) {
 
 	_ = decodeCtx.Delegations.Range(func(_ string, value *storage.Delegation) (error, bool) {
 		data.delegations = append(data.delegations, *value)
+		if data.bondedTokensPool != nil {
+			data.bondedTokensPool.Balance.Spendable = data.bondedTokensPool.Balance.Spendable.Add(value.Amount)
+		}
+		if addr, ok := data.addresses[value.Address.Address]; ok {
+			addr.Balance.Spendable = addr.Balance.Spendable.Sub(value.Amount)
+		}
 		return nil, false
 	})
 
@@ -143,7 +160,12 @@ func (module *Module) parseTotalSupply(supply []types.Supply, block *storage.Blo
 	}
 }
 
-func (module *Module) parseAccounts(accounts []types.Accounts, block storage.Block, data *parsedData) error {
+func (module *Module) parseAccounts(accounts []types.Account, block storage.Block, data *parsedData) error {
+	currencyBase := currency.DefaultCurrency
+	if len(data.denomMetadata) > 0 {
+		currencyBase = data.denomMetadata[0].Base
+	}
+
 	for i := range accounts {
 		address := storage.Address{
 			Height:     block.Height,
@@ -152,7 +174,7 @@ func (module *Module) parseAccounts(accounts []types.Accounts, block storage.Blo
 				Spendable: decimal.Zero,
 				Delegated: decimal.Zero,
 				Unbonding: decimal.Zero,
-				Currency:  data.denomMetadata[0].Base,
+				Currency:  currencyBase,
 			},
 		}
 
@@ -167,6 +189,11 @@ func (module *Module) parseAccounts(accounts []types.Accounts, block storage.Blo
 
 		case strings.Contains(accounts[i].Type, "ModuleAccount"):
 			readableAddress = accounts[i].BaseAccount.Address
+			address.Name = accounts[i].Name
+
+			if address.Name == "bonded_tokens_pool" {
+				data.bondedTokensPool = &address
+			}
 
 		case strings.Contains(accounts[i].Type, "BaseAccount"):
 			readableAddress = accounts[i].Address
@@ -187,13 +214,15 @@ func (module *Module) parseAccounts(accounts []types.Accounts, block storage.Blo
 			return errors.Errorf("unknown account type: %s", accounts[i].Type)
 		}
 
-		_, hash, err := pkgTypes.Address(readableAddress).Decode()
-		if err != nil {
-			return err
+		if _, ok := data.addresses[readableAddress]; !ok {
+			_, hash, err := pkgTypes.Address(readableAddress).Decode()
+			if err != nil {
+				return err
+			}
+			address.Hash = hash
+			address.Address = readableAddress
+			data.addresses[address.String()] = &address
 		}
-		address.Hash = hash
-		address.Address = readableAddress
-		data.addresses[address.String()] = &address
 	}
 	return nil
 }
@@ -248,7 +277,7 @@ func getAmountFromOriginalVesting(vestings []types.Coins) (decimal.Decimal, erro
 	return amount, nil
 }
 
-func parseVesting(acc types.Accounts, block storage.Block, address string, typ storageTypes.VestingType, data *parsedData) error {
+func parseVesting(acc types.Account, block storage.Block, address string, typ storageTypes.VestingType, data *parsedData) error {
 	amount, err := getAmountFromOriginalVesting(acc.BaseVestingAccount.OriginalVesting)
 	if err != nil {
 		return err

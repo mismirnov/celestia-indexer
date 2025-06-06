@@ -34,7 +34,7 @@ func (s *StatsTestSuite) SetupSuite() {
 		Password: "password",
 		Database: "db_test",
 		Port:     5432,
-		Image:    "timescale/timescaledb-ha:pg15-latest",
+		Image:    "timescale/timescaledb-ha:pg15.8-ts2.17.0-all",
 	})
 	s.Require().NoError(err)
 	s.psqlContainer = psqlContainer
@@ -46,7 +46,7 @@ func (s *StatsTestSuite) SetupSuite() {
 		Password: s.psqlContainer.Config.Password,
 		Host:     s.psqlContainer.Config.Host,
 		Port:     s.psqlContainer.MappedPort().Int(),
-	}, "../../../database")
+	}, "../../../database", false)
 	s.Require().NoError(err)
 	s.storage = strg
 
@@ -303,6 +303,34 @@ func (s *StatsTestSuite) TestMessagesCount24h() {
 	items, err := s.storage.Stats.MessagesCount24h(ctx)
 	s.Require().NoError(err)
 	s.Require().Len(items, 0)
+}
+
+func (s *StatsTestSuite) TestChange24hBlockStats() {
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer ctxCancel()
+
+	stats, err := s.storage.Stats.Change24hBlockStats(ctx)
+	s.Require().NoError(err)
+	s.Require().Equal(stats.BlobsSize, 0.0)
+	s.Require().Equal(stats.BytesInBlock, 0.0)
+	s.Require().Equal(stats.Fee, 0.0)
+	s.Require().Equal(stats.TxCount, 0.0)
+}
+
+func (s *StatsTestSuite) TestSizeGroups() {
+	ctx, ctxCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer ctxCancel()
+
+	tf := time.Now().UTC().AddDate(-25, 0, 0)
+
+	groups, err := s.storage.Stats.SizeGroups(ctx, &tf)
+	s.Require().NoError(err)
+	s.Require().Len(groups, 5)
+	s.Require().EqualValues(5, groups[0].Count)
+	s.Require().EqualValues(0, groups[1].Count)
+	s.Require().EqualValues(0, groups[2].Count)
+	s.Require().EqualValues(0, groups[3].Count)
+	s.Require().EqualValues(0, groups[4].Count)
 }
 
 func TestSuiteStats_Run(t *testing.T) {

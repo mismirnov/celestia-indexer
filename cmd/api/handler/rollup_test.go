@@ -15,6 +15,7 @@ import (
 	"github.com/celenium-io/celestia-indexer/cmd/api/handler/responses"
 	"github.com/celenium-io/celestia-indexer/internal/storage"
 	"github.com/celenium-io/celestia-indexer/internal/storage/mock"
+	"github.com/celenium-io/celestia-indexer/internal/storage/types"
 	sdk "github.com/dipdup-net/indexer-sdk/pkg/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/suite"
@@ -31,6 +32,12 @@ var (
 		Twitter:     "https://x.com",
 		Logo:        "image.png",
 		Slug:        "test-rollup",
+		Tags:        []string{"ai"},
+		Category:    types.RollupCategoryNft,
+		Type:        types.RollupTypeSettled,
+		Stack:       "stack 1, stack 2",
+		Provider:    "Provider 1",
+		Color:       "#123456",
 	}
 	testRollupWithStats = storage.RollupWithStats{
 		Rollup: testRollup,
@@ -43,7 +50,17 @@ var (
 			FeePct:          0.2,
 			SizePct:         0.3,
 		},
+		DAChange: storage.DAChange{
+			DAPct: 0.1,
+		},
 	}
+	testRollupWithGroupedStats = storage.RollupGroupedStats{
+		Fee:        0.1,
+		Size:       0.2,
+		BlobsCount: 3,
+		Group:      "stack",
+	}
+	testRollupActivity = true
 )
 
 // RollupTestSuite -
@@ -87,6 +104,12 @@ func (s *RollupTestSuite) TestLeaderboard() {
 	} {
 		q := make(url.Values)
 		q.Add("sort_by", sort)
+		q.Add("type", "sovereign")
+		q.Add("category", "nft,gaming")
+		q.Add("tags", "ai")
+		q.Add("stack", "stack 1,stack 2")
+		q.Add("provider", "provider 1")
+		q.Add("is_active", "true")
 
 		req := httptest.NewRequest(http.MethodGet, "/?"+q.Encode(), nil)
 		rec := httptest.NewRecorder()
@@ -94,7 +117,23 @@ func (s *RollupTestSuite) TestLeaderboard() {
 		c.SetPath("/rollup")
 
 		s.rollups.EXPECT().
-			Leaderboard(gomock.Any(), sort, sdk.SortOrderDesc, 10, 0).
+			Leaderboard(gomock.Any(), storage.LeaderboardFilters{
+				SortField: sort,
+				Sort:      sdk.SortOrderDesc,
+				Limit:     10,
+				Offset:    0,
+				Category: []types.RollupCategory{
+					types.RollupCategoryNft,
+					types.RollupCategoryGaming,
+				},
+				Type: []types.RollupType{
+					types.RollupTypeSovereign,
+				},
+				Tags:     []string{"ai"},
+				Stack:    []string{"stack 1", "stack 2"},
+				Provider: []string{"provider 1"},
+				IsActive: &testRollupActivity,
+			}).
 			Return([]storage.RollupWithStats{testRollupWithStats}, nil).
 			Times(1)
 
@@ -118,6 +157,8 @@ func (s *RollupTestSuite) TestLeaderboard() {
 		s.Require().EqualValues(0.1, rollup.BlobsCountPct)
 		s.Require().EqualValues(0.2, rollup.FeePct)
 		s.Require().EqualValues(0.3, rollup.SizePct)
+		s.Require().EqualValues(0.1, rollup.DAPct)
+		s.Require().EqualValues("#123456", rollup.Color)
 	}
 }
 
@@ -127,6 +168,11 @@ func (s *RollupTestSuite) TestLeaderboardDay() {
 	} {
 		q := make(url.Values)
 		q.Add("sort_by", sort)
+		q.Add("category", "nft,gaming")
+		q.Add("type", "sovereign")
+		q.Add("tags", "ai")
+		q.Add("stack", "stack 1,stack 2")
+		q.Add("provider", "provider 1")
 
 		req := httptest.NewRequest(http.MethodGet, "/?"+q.Encode(), nil)
 		rec := httptest.NewRecorder()
@@ -134,7 +180,22 @@ func (s *RollupTestSuite) TestLeaderboardDay() {
 		c.SetPath("/rollup/day")
 
 		s.rollups.EXPECT().
-			LeaderboardDay(gomock.Any(), sort, sdk.SortOrderDesc, 10, 0).
+			LeaderboardDay(gomock.Any(), storage.LeaderboardFilters{
+				SortField: sort,
+				Sort:      sdk.SortOrderDesc,
+				Limit:     10,
+				Offset:    0,
+				Category: []types.RollupCategory{
+					types.RollupCategoryNft,
+					types.RollupCategoryGaming,
+				},
+				Type: []types.RollupType{
+					types.RollupTypeSovereign,
+				},
+				Tags:     []string{"ai"},
+				Stack:    []string{"stack 1", "stack 2"},
+				Provider: []string{"provider 1"},
+			}).
 			Return([]storage.RollupWithDayStats{
 				{
 					Rollup: testRollup,
@@ -159,6 +220,7 @@ func (s *RollupTestSuite) TestLeaderboardDay() {
 		s.Require().EqualValues("image.png", rollup.Logo)
 		s.Require().EqualValues("test-rollup", rollup.Slug)
 		s.Require().EqualValues(100, rollup.BlobsCount)
+		s.Require().EqualValues("#123456", rollup.Color)
 	}
 }
 
@@ -192,6 +254,7 @@ func (s *RollupTestSuite) TestGet() {
 	s.Require().EqualValues(0.1, rollup.BlobsCountPct)
 	s.Require().EqualValues(0.2, rollup.FeePct)
 	s.Require().EqualValues(0.3, rollup.SizePct)
+	s.Require().EqualValues("#123456", rollup.Color)
 }
 
 func (s *RollupTestSuite) TestGetNamespaces() {
@@ -248,6 +311,17 @@ func (s *RollupTestSuite) TestGetBlobs() {
 			},
 		}, nil)
 
+	s.rollups.EXPECT().
+		ById(gomock.Any(), uint64(1)).
+		Return(storage.RollupWithStats{
+			Rollup: testRollup,
+			RollupStats: storage.RollupStats{
+				LastActionTime:  testTime,
+				FirstActionTime: testTime,
+			},
+		}, nil).
+		Times(1)
+
 	s.blobs.EXPECT().
 		ByProviders(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return([]storage.BlobLog{
@@ -279,13 +353,13 @@ func (s *RollupTestSuite) TestGetBlobs() {
 
 func (s *RollupTestSuite) TestStats() {
 	for _, name := range []string{"blobs_count", "size", "size_per_blob", "fee"} {
-		for _, tf := range []string{"hour", "day", "month"} {
+		for _, tf := range []storage.Timeframe{storage.TimeframeHour, storage.TimeframeDay, storage.TimeframeMonth} {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			rec := httptest.NewRecorder()
 			c := s.echo.NewContext(req, rec)
 			c.SetPath("/rollup/:id/stats/:name/:timeframe")
 			c.SetParamNames("id", "name", "timeframe")
-			c.SetParamValues("1", name, tf)
+			c.SetParamValues("1", name, string(tf))
 
 			s.rollups.EXPECT().
 				Series(gomock.Any(), uint64(1), tf, name, storage.NewSeriesRequest(0, 0)).
@@ -309,13 +383,13 @@ func (s *RollupTestSuite) TestStats() {
 
 func (s *RollupTestSuite) TestDistribution() {
 	for _, name := range []string{"blobs_count", "size", "size_per_blob", "fee_per_blob"} {
-		for _, tf := range []string{"hour", "day"} {
+		for _, tf := range []storage.Timeframe{storage.TimeframeHour, storage.TimeframeDay} {
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			rec := httptest.NewRecorder()
 			c := s.echo.NewContext(req, rec)
 			c.SetPath("/rollup/:id/distribution/:name/:timeframe")
 			c.SetParamNames("id", "name", "timeframe")
-			c.SetParamValues("1", name, tf)
+			c.SetParamValues("1", name, string(tf))
 
 			s.rollups.EXPECT().
 				Distribution(gomock.Any(), uint64(1), name, tf).
@@ -404,38 +478,94 @@ func (s *RollupTestSuite) TestByExportBlobs() {
 }
 
 func (s *RollupTestSuite) TestAllSeries() {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := s.echo.NewContext(req, rec)
-	c.SetPath("/rollup/stats/series")
+	for _, tf := range []storage.Timeframe{
+		storage.TimeframeHour,
+		storage.TimeframeDay,
+		storage.TimeframeMonth,
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		rec := httptest.NewRecorder()
+		c := s.echo.NewContext(req, rec)
+		c.SetPath("/rollup/stats/series/:timeframe")
+		c.SetParamNames("timeframe")
+		c.SetParamValues(string(tf))
 
-	s.rollups.EXPECT().
-		AllSeries(gomock.Any()).
-		Return([]storage.RollupHistogramItem{
-			{
-				Name:       testRollup.Name,
-				Logo:       testRollup.Logo,
-				Time:       testTime,
-				BlobsCount: 1,
-				Size:       2,
-				Fee:        "3",
-			},
-		}, nil).
-		Times(1)
+		s.rollups.EXPECT().
+			AllSeries(gomock.Any(), tf).
+			Return([]storage.RollupHistogramItem{
+				{
+					Name:       testRollup.Name,
+					Logo:       testRollup.Logo,
+					Time:       testTime,
+					BlobsCount: 1,
+					Size:       2,
+					Fee:        "3",
+				},
+			}, nil).
+			Times(1)
 
-	s.Require().NoError(s.handler.AllSeries(c))
-	s.Require().Equal(http.StatusOK, rec.Code)
+		s.Require().NoError(s.handler.AllSeries(c))
+		s.Require().Equal(http.StatusOK, rec.Code)
 
-	var items []responses.RollupAllSeriesItem
-	err := json.NewDecoder(rec.Body).Decode(&items)
-	s.Require().NoError(err)
-	s.Require().Len(items, 1)
+		var items []responses.RollupAllSeriesResponse
+		err := json.NewDecoder(rec.Body).Decode(&items)
+		s.Require().NoError(err)
+		s.Require().Len(items, 1)
 
-	item := items[0]
-	s.Require().EqualValues("test rollup", item.Name)
-	s.Require().EqualValues("3", item.Fee)
-	s.Require().EqualValues("image.png", item.Logo)
-	s.Require().EqualValues(2, item.Size)
-	s.Require().EqualValues(1, item.BlobsCount)
-	s.Require().EqualValues(testTime, item.Time)
+		for _, item := range items {
+			s.Require().Equal(testTime.String(), item.Time.String())
+			s.Require().Len(item.Items, 1)
+			s.Require().EqualValues("test rollup", item.Items[0].Name)
+			s.Require().EqualValues("3", item.Items[0].Fee)
+			s.Require().EqualValues("image.png", item.Items[0].Logo)
+			s.Require().EqualValues(2, item.Items[0].Size)
+			s.Require().EqualValues(1, item.Items[0].BlobsCount)
+		}
+	}
+}
+
+func (s *RollupTestSuite) TestRollupStatsGrouping() {
+	for _, funcName := range []string{
+		"sum",
+		"avg",
+	} {
+		for _, groupName := range []string{
+			"stack",
+			"type",
+			"category",
+			"vm",
+			"provider",
+		} {
+			q := make(url.Values)
+			q.Add("func", funcName)
+			q.Add("column", groupName)
+
+			req := httptest.NewRequest(http.MethodGet, "/?"+q.Encode(), nil)
+			rec := httptest.NewRecorder()
+			c := s.echo.NewContext(req, rec)
+			c.SetPath("/rollup/group")
+
+			s.rollups.EXPECT().
+				RollupStatsGrouping(gomock.Any(), storage.RollupGroupStatsFilters{
+					Func:   funcName,
+					Column: groupName,
+				}).
+				Return([]storage.RollupGroupedStats{testRollupWithGroupedStats}, nil).
+				Times(1)
+
+			s.Require().NoError(s.handler.RollupGroupedStats(c))
+			s.Require().Equal(http.StatusOK, rec.Code)
+			var stats []responses.RollupGroupedStats
+			err := json.NewDecoder(rec.Body).Decode(&stats)
+			s.Require().NoError(err)
+			s.Require().Len(stats, 1)
+
+			groupedStats := stats[0]
+
+			s.Require().EqualValues(0.1, groupedStats.Fee)
+			s.Require().EqualValues(0.2, groupedStats.Size)
+			s.Require().EqualValues(3, groupedStats.BlobsCount)
+			s.Require().EqualValues("stack", groupedStats.Group)
+		}
+	}
 }

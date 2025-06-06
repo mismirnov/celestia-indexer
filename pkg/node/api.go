@@ -20,10 +20,16 @@ type Api interface {
 	Genesis(ctx context.Context) (types.Genesis, error)
 	BlockData(ctx context.Context, level pkgTypes.Level) (pkgTypes.BlockData, error)
 	BlockDataGet(ctx context.Context, level pkgTypes.Level) (pkgTypes.BlockData, error)
+	BlockBulkData(ctx context.Context, levels ...pkgTypes.Level) ([]pkgTypes.BlockData, error)
 }
 
 //go:generate mockgen -source=$GOFILE -destination=mock/$GOFILE -package=mock -typed
 type DalApi interface {
 	Blobs(ctx context.Context, height pkgTypes.Level, hash ...string) ([]types.Blob, error)
 	Blob(ctx context.Context, height pkgTypes.Level, namespace, commitment string) (types.Blob, error)
+}
+
+//go:generate mockgen -source=$GOFILE -destination=mock/$GOFILE -package=mock -typed
+type CosmosApi interface {
+	ModuleAccounts(ctx context.Context) ([]types.Account, error)
 }

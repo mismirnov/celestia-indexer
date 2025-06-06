@@ -56,12 +56,12 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
+	initCache(cfg.ApiConfig.Cache)
 	db := initDatabase(cfg.Database, cfg.Indexer.ScriptsDir)
-	e := initEcho(cfg.ApiConfig, db, cfg.Environment)
+	e := initEcho(cfg.ApiConfig, cfg.Environment)
 	initDispatcher(ctx, db)
 	initGasTracker(ctx, db)
 	initHandlers(ctx, e, *cfg, db)
-	initObservableCache(ctx, e)
 
 	go func() {
 		if err := e.Start(cfg.ApiConfig.Bind); err != nil && errors.Is(err, http.ErrServerClosed) {
@@ -72,6 +72,9 @@ func main() {
 	<-ctx.Done()
 	cancel()
 
+	if err := e.Shutdown(ctx); err != nil {
+		e.Logger.Fatal(err)
+	}
 	if gasTracker != nil {
 		if err := gasTracker.Close(); err != nil {
 			e.Logger.Fatal(err)
@@ -83,21 +86,11 @@ func main() {
 			e.Logger.Fatal(err)
 		}
 	}
-	if endpointCache != nil {
-		if err := endpointCache.Close(); err != nil {
-			e.Logger.Fatal(err)
-		}
-	}
 	if dispatcher != nil {
 		if err := dispatcher.Close(); err != nil {
 			e.Logger.Fatal(err)
 		}
 	}
-
-	if err := e.Shutdown(ctx); err != nil {
-		e.Logger.Fatal(err)
-	}
-
 	if prscp != nil {
 		if err := prscp.Stop(); err != nil {
 			e.Logger.Fatal(err)
@@ -105,5 +98,10 @@ func main() {
 	}
 	if err := db.Close(); err != nil {
 		e.Logger.Fatal(err)
+	}
+	if ttlCache != nil {
+		if err := ttlCache.Close(); err != nil {
+			e.Logger.Fatal(err)
+		}
 	}
 }

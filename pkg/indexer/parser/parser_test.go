@@ -17,11 +17,11 @@ import (
 	"github.com/celenium-io/celestia-indexer/pkg/indexer/config"
 	dCtx "github.com/celenium-io/celestia-indexer/pkg/indexer/decode/context"
 	"github.com/celenium-io/celestia-indexer/pkg/types"
+	tmTypes "github.com/cometbft/cometbft/types"
 	"github.com/dipdup-net/indexer-sdk/pkg/modules"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	tmTypes "github.com/tendermint/tendermint/types"
 )
 
 func createModules(t *testing.T) (modules.BaseModule, string, Module) {
@@ -134,24 +134,6 @@ func getBlock() types.BlockData {
 			TxsResults:       nil,
 			BeginBlockEvents: nil,
 			EndBlockEvents:   nil,
-			ValidatorUpdates: nil,
-			ConsensusParamUpdates: &types.ConsensusParams{
-				Block: &types.BlockParams{
-					MaxBytes: 0,
-					MaxGas:   0,
-				},
-				Evidence: &types.EvidenceParams{
-					MaxAgeNumBlocks: 0,
-					MaxAgeDuration:  0,
-					MaxBytes:        0,
-				},
-				Validator: &types.ValidatorParams{
-					PubKeyTypes: nil,
-				},
-				Version: &types.VersionParams{
-					AppVersion: 0,
-				},
-			},
 		},
 	}
 }
@@ -166,7 +148,7 @@ func TestParserModule_Success(t *testing.T) {
 	err := readerModule.AttachTo(&parserModule, OutputName, readerInputName)
 	assert.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 	defer cancel()
 
 	parserModule.Start(ctx)
@@ -201,7 +183,7 @@ func TestModule_OnClosedChannel(t *testing.T) {
 	err := stopperModule.AttachTo(&parserModule, StopOutput, stopInputName)
 	assert.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*1)
 	defer cancel()
 
 	parserModule.Start(ctx)
@@ -230,7 +212,7 @@ func TestModule_OnParseError(t *testing.T) {
 	err := stopperModule.AttachTo(&parserModule, StopOutput, stopInputName)
 	assert.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*1)
 	defer cancel()
 
 	parserModule.Start(ctx)
@@ -298,7 +280,7 @@ func getBlockByHeight(height uint64) (types.BlockData, error) {
 func TestModule_1768659(t *testing.T) {
 	writerModule, writerOutputName, parserModule := createModules(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*1)
 	defer cancel()
 
 	parserModule.Start(ctx)

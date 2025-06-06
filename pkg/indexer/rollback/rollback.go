@@ -213,6 +213,25 @@ func (module *Module) rollbackBlock(ctx context.Context, height types.Level) err
 		return tx.HandleError(ctx, err)
 	}
 
+	if err := tx.RollbackVotes(ctx, height); err != nil {
+		return err
+	}
+	if err := tx.RollbackProposals(ctx, height); err != nil {
+		return err
+	}
+	if err := tx.RollbackIbcTransfers(ctx, height); err != nil {
+		return err
+	}
+	if err := tx.RollbackIbcChannels(ctx, height); err != nil {
+		return err
+	}
+	if err := tx.RollbackIbcConnections(ctx, height); err != nil {
+		return err
+	}
+	if err := tx.RollbackIbcClients(ctx, height); err != nil {
+		return err
+	}
+
 	newBlock, err := tx.LastBlock(ctx)
 	if err != nil {
 		return tx.HandleError(ctx, err)

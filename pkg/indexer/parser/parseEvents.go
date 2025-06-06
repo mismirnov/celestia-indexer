@@ -4,6 +4,9 @@
 package parser
 
 import (
+	"encoding/base64"
+
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 
 	"github.com/celenium-io/celestia-indexer/internal/storage"
@@ -38,7 +41,19 @@ func parseEvent(ctx *context.Context, b types.BlockData, eN types.Event, index i
 	resultEvent.Data = make(map[string]any, len(eN.Attributes))
 
 	for i := range eN.Attributes {
-		resultEvent.Data[string(eN.Attributes[i].Key)] = string(eN.Attributes[i].Value)
+		if b.AppVersion <= 3 {
+			key, err := base64.StdEncoding.DecodeString(eN.Attributes[i].Key)
+			if err != nil {
+				return errors.Wrapf(err, "decode event attribute key: %s appversion=%d", eN.Attributes[i].Key, b.AppVersion)
+			}
+			value, err := base64.StdEncoding.DecodeString(eN.Attributes[i].Value)
+			if err != nil {
+				return errors.Wrapf(err, "decode event attribute key: %s appversion=%d", eN.Attributes[i].Key, b.AppVersion)
+			}
+			resultEvent.Data[string(key)] = string(value)
+		} else {
+			resultEvent.Data[eN.Attributes[i].Key] = eN.Attributes[i].Value
+		}
 	}
 
 	return processEvent(ctx, resultEvent)
@@ -65,6 +80,10 @@ func processEvent(ctx *context.Context, event *storage.Event) error {
 		return parseRewards(ctx, event.Data)
 	case storageTypes.EventTypeSlash:
 		return parseSlash(ctx, event.Data)
+	case storageTypes.EventTypeActiveProposal:
+		return parseProposal(ctx, event.Data)
+	case storageTypes.EventTypeInactiveProposal:
+		return parseProposal(ctx, event.Data)
 	}
 
 	return nil
