@@ -7637,7 +7637,8 @@
                     "example": "2023-07-04T03:10:57+00:00"
                 },
                 "changes": {
-                    "type": "object"
+                    "type": "object",
+                    "x-nullable": "true"
                 },
                 "created_at": {
                     "type": "string",
