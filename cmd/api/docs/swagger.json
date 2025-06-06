@@ -6309,6 +6309,10 @@
                 "last_height": {
                     "type": "integer",
                     "example": 100
+                },
+                "name": {
+                    "type": "string",
+                    "example": "bonded_tokens_pool"
                 }
             }
         },
@@ -7633,10 +7637,8 @@
                     "example": "2023-07-04T03:10:57+00:00"
                 },
                 "changes": {
-                    "type": "array",
-                    "items": {
-                        "type": "integer"
-                    }
+                    "type": "object",
+                    "format": "json"
                 },
                 "created_at": {
                     "type": "string",
